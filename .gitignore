@@ -1,0 +1,30 @@
+# Local generated builds
+android.html
+
+# Codex / local temporary files
+.agents/
+.codex/
+.codex-remote-attachments/
+*.log
+
+# Local dev outputs
+node_modules/
+dist/
+build/
+.cache/
+.tmp/
+tmp/
+local-output/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Optional local screenshots and recordings
+screenshots/
+playtest-output/
+*.webm
+*.mp4

@@ -1,0 +1,33 @@
+{
+    "monsterIndex":  13,
+    "frameSize":  256,
+    "stages":  {
+                   "baby":  {
+                                "idle-1":  "baby/idle-1.png",
+                                "idle-2":  "baby/idle-2.png",
+                                "entrance":  "baby/entrance.png",
+                                "hit":  "baby/hit.png",
+                                "defeat":  "baby/defeat.png",
+                                "capture":  "baby/capture.png",
+                                "evolution":  "baby/evolution.png"
+                            },
+                   "rookie":  {
+                                  "idle-1":  "rookie/idle-1.png",
+                                  "idle-2":  "rookie/idle-2.png",
+                                  "entrance":  "rookie/entrance.png",
+                                  "hit":  "rookie/hit.png",
+                                  "defeat":  "rookie/defeat.png",
+                                  "capture":  "rookie/capture.png",
+                                  "evolution":  "rookie/evolution.png"
+                              },
+                   "ultimate":  {
+                                    "idle-1":  "ultimate/idle-1.png",
+                                    "idle-2":  "ultimate/idle-2.png",
+                                    "entrance":  "ultimate/entrance.png",
+                                    "hit":  "ultimate/hit.png",
+                                    "defeat":  "ultimate/defeat.png",
+                                    "capture":  "ultimate/capture.png",
+                                    "evolution":  "ultimate/evolution.png"
+                                }
+               }
+}

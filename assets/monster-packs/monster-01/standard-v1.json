@@ -1,0 +1,31 @@
+{
+  "monsterIndex": 1,
+  "standard": "monster-formal-pack-v1",
+  "frameSize": 256,
+  "stages": ["baby", "rookie", "ultimate"],
+  "formalArtActions": ["idle-1", "idle-2", "entrance", "hit", "defeat"],
+  "effectPlaceholderActions": ["capture", "evolution"],
+  "sourceSheets": {
+    "evolution": {
+      "path": "../../evolutions/monster-01-polished-source.png",
+      "stageWindows": "0,650;650,1320;1320,2172"
+    },
+    "idle": {
+      "path": "idle-source-v1.png",
+      "actions": ["idle-1", "idle-2"],
+      "rowWindows": "0,405;405,795;795,1254"
+    },
+    "battle": {
+      "path": "action-source-v1.png",
+      "actions": ["entrance", "hit", "defeat"],
+      "rowWindows": "0,410;410,790;790,1254"
+    }
+  },
+  "qualityNotes": [
+    "Evolution source was regenerated to replace the early engineering accessory version.",
+    "Five core battle-facing actions use generated hand-painted pixel-art poses.",
+    "Capture and evolution remain reusable effect composites for this version.",
+    "All shipped action frames are normalized to 256x256 transparent PNG.",
+    "Rows and columns use explicit crop windows because generated sheets are not perfectly evenly spaced."
+  ]
+}

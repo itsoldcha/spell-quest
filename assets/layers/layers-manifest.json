@@ -1,0 +1,38 @@
+{
+  "canvas": {
+    "width": 1672,
+    "height": 941
+  },
+  "background": "bg-clean.png",
+  "regionBackgrounds": {
+    "grassland": "regions/bg-region-grassland.png",
+    "forest": "regions/bg-region-forest.png",
+    "ice": "regions/bg-region-ice.png",
+    "machine": "regions/bg-region-machine.png",
+    "astral": "regions/bg-region-astral.png"
+  },
+  "overlays": [
+    "clouds-far.png",
+    "clouds-near.png",
+    "haze-light.png"
+  ],
+  "foreground": [
+    "cannon-left.png",
+    "cannon-right.png"
+  ],
+  "effects": [
+    "muzzle-flash-sheet.png",
+    "projectile-bolt-sheet.png"
+  ],
+  "sources": [
+    "../../art-source/layers/bg-clean-source.png",
+    "../../art-source/layers/cannon-left-source.png",
+    "../../art-source/layers/cannon-right-source.png",
+    "../../art-source/layers/art-reference-sheet.png"
+  ],
+  "previews": [
+    "../../local-output/previews/layers/layer-preview.png",
+    "../../local-output/previews/layers/cannon-alpha-preview.png"
+  ],
+  "notes": "First separated pixel-art layer pass. Generated source assets are preserved; transparent cannons use magenta chroma-key removal."
+}

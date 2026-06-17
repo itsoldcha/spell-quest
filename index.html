@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Spell Quest</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <main class="game-shell" aria-label="Spell Quest spelling battle">
+      <section class="stage-view" aria-label="First person battle">
+        <header class="battle-hud">
+          <div class="brand-block">
+            <p class="eyebrow">Spell Quest</p>
+            <h1>單字怪獸挑戰</h1>
+          </div>
+
+          <div class="stage-track" id="stageTrack" aria-label="Stage progress"></div>
+
+          <div class="hud-group">
+            <div class="hud-pill">
+              <span>遭遇</span>
+              <strong id="stageLabel">1/6</strong>
+            </div>
+            <div class="hud-pill">
+              <span>連擊</span>
+              <strong id="comboLabel">0</strong>
+            </div>
+            <button class="icon-button" id="reloadButton" type="button" title="重新載入題庫" aria-label="重新載入題庫">
+              <span aria-hidden="true">↻</span>
+            </button>
+            <button class="icon-button" id="hudMusicButton" type="button" title="音樂開關" aria-label="音樂開關">
+              <span aria-hidden="true">♪</span>
+            </button>
+            <button class="icon-button" id="homeButton" type="button" title="回首頁" aria-label="回首頁">
+              <span aria-hidden="true">←</span>
+            </button>
+            <button class="icon-button" id="dexButton" type="button" title="怪物圖鑑" aria-label="怪物圖鑑">
+              <span aria-hidden="true">★</span>
+            </button>
+          </div>
+        </header>
+
+        <div class="arena-frame" id="dungeonFrame">
+          <div class="world-layer" id="worldLayer" aria-hidden="true">
+            <div class="heat-layer"></div>
+          </div>
+          <canvas id="dungeonCanvas" width="1200" height="720" aria-hidden="true"></canvas>
+
+          <div class="top-status">
+            <div class="status-card player">
+              <div class="status-name">勇者 HP</div>
+              <div class="hp-track player-hp" aria-label="Player health">
+                <div class="hp-fill player-fill" id="playerHpFill"></div>
+              </div>
+            </div>
+            <div class="status-card monster-card">
+              <div class="status-name" id="monsterName">Sprout Fang</div>
+              <div class="hp-track" aria-label="Monster health">
+                <div class="hp-fill" id="hpFill"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="crosshair" aria-hidden="true"></div>
+          <div class="battle-word-lock" id="battleWordLock" aria-label="Answer lock">
+            <div class="answer-display" id="answerDisplay" aria-label="Answer progress"></div>
+          </div>
+
+          <div class="monster" id="monster" aria-hidden="true">
+            <div class="monster-shadow"></div>
+            <div class="monster-glow"></div>
+            <img id="monsterSprite" src="assets/monsters/monster-00.png" alt="">
+          </div>
+
+          <div class="player-gear" aria-hidden="true">
+            <div class="blaster left"></div>
+            <div class="blaster right"></div>
+          </div>
+
+          <div class="slash" id="slash" aria-hidden="true"></div>
+          <div class="impact-burst" id="impactBurst" aria-hidden="true"></div>
+          <div class="projectile left" id="projectileLeft" aria-hidden="true"></div>
+          <div class="projectile right" id="projectileRight" aria-hidden="true"></div>
+          <div class="muzzle-flash left" id="muzzleLeft" aria-hidden="true"></div>
+          <div class="muzzle-flash right" id="muzzleRight" aria-hidden="true"></div>
+          <div class="speed-lines" id="speedLines" aria-hidden="true"></div>
+          <div class="damage-text" id="damageText" aria-hidden="true"></div>
+          <div class="stage-banner" id="stageBanner" aria-live="polite"></div>
+          <div class="region-intro hidden" id="regionIntro" aria-live="polite">
+            <div class="region-intro-art" id="regionIntroArt" aria-hidden="true"></div>
+            <div class="region-intro-copy">
+              <span id="regionIntroRoute">Route 01</span>
+              <strong id="regionIntroName">陽光草原</strong>
+              <em id="regionIntroDetail">準備出發！</em>
+            </div>
+          </div>
+          <div class="scout-overlay hidden" id="scoutOverlay" aria-live="polite">
+            <div class="scout-panel">
+              <p id="scoutTitle">戰前偵查</p>
+              <h2 id="scoutSubtitle">怪物情報整理中</h2>
+              <div class="scout-list" id="scoutList"></div>
+              <div class="scout-actions">
+                <button class="secondary-button" id="scoutSkipButton" type="button">這次略過</button>
+                <button class="primary-button" id="scoutStartButton" type="button">開始戰鬥</button>
+              </div>
+            </div>
+          </div>
+          <div class="answer-callout hidden" id="answerCallout" aria-live="polite">
+            <span id="answerCalloutSpeaker">Monster</span>
+            <strong id="answerCalloutText">Correct answer</strong>
+          </div>
+          <div class="reward-pop hidden" id="rewardPop" aria-live="polite">
+            <span id="rewardTitle">Reward</span>
+            <small id="rewardDetail">Quest updated</small>
+          </div>
+          <div class="capture-card hidden" id="captureCard" aria-live="polite">
+            <p>New Monster</p>
+            <img id="captureCardImage" src="assets/monsters/monster-00.png" alt="">
+            <strong id="captureCardName">Sprout Fang</strong>
+            <span>收服成功！</span>
+          </div>
+          <div class="clear-cinematic hidden" id="clearCinematic" aria-live="polite">
+            <div class="clear-beam" aria-hidden="true"></div>
+            <div class="clear-panel">
+              <p id="clearKicker">Area Clear</p>
+              <h2 id="clearTitle">地區突破！</h2>
+              <strong id="clearRegion">沙漠入口</strong>
+              <span id="clearDetail">Boss 擊破，遠征路線已更新。</span>
+              <div class="clear-progress" id="clearProgress"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="battle-footer">
+          <span id="questionProgress">0 / 0</span>
+          <span id="chapterLabel">-</span>
+          <span id="tagLabel">-</span>
+        </div>
+      </section>
+
+      <section class="play-panel" aria-label="Spelling question">
+        <div class="source-row">
+          <span id="sourceStatus">載入題庫中...</span>
+          <span id="questionType">-</span>
+        </div>
+
+        <div class="mastery-row">
+          <span id="masteryLabel">熟練度 -</span>
+          <span id="captureLabel">收服 0 / 30</span>
+        </div>
+
+        <div class="battle-flow" id="battleFlow" aria-label="Battle flow">
+          <span class="active" data-phase="listen">聽音</span>
+          <span data-phase="spell">拼字</span>
+          <span data-phase="attack">攻擊</span>
+          <span data-phase="advance">前進</span>
+        </div>
+
+        <div class="question-block">
+          <p class="question-label">中文題目</p>
+          <h2 id="zhPrompt">準備中</h2>
+        </div>
+
+        <div class="sound-row">
+          <button class="primary-button" id="speakButton" type="button">
+            <span aria-hidden="true">▶</span>
+            重聽發音
+          </button>
+          <button class="secondary-button" id="skipButton" type="button">看答案</button>
+        </div>
+
+        <div class="monster-test-panel hidden" id="monsterTestPanel" aria-label="Monster battle test controls">
+          <div class="test-header">
+            <strong>怪物戰鬥測試</strong>
+            <span>第 1 隻標準包 v1</span>
+          </div>
+          <div class="test-monster-status" id="testMonsterStatus">Monster 00 · formal-v1</div>
+          <div class="test-monster-picker" aria-label="Monster picker">
+            <button class="secondary-button" id="testPrevMonsterButton" type="button">Prev</button>
+            <label class="test-select-label">
+              <span>Monster</span>
+              <select id="testMonsterSelect" aria-label="Select monster"></select>
+            </label>
+            <button class="secondary-button" id="testNextMonsterButton" type="button">Next</button>
+          </div>
+          <div class="test-stage-buttons" role="group" aria-label="Evolution stage">
+            <button class="secondary-button" id="testBabyButton" type="button">幼年期</button>
+            <button class="secondary-button" id="testRookieButton" type="button">成長期</button>
+            <button class="secondary-button" id="testUltimateButton" type="button">完全體</button>
+          </div>
+          <div class="test-action-buttons" role="group" aria-label="Monster action">
+            <button class="primary-button" id="testIntroButton" type="button">進場</button>
+            <button class="primary-button" id="testHitButton" type="button">受擊</button>
+            <button class="primary-button" id="testDefeatButton" type="button">擊敗</button>
+            <button class="secondary-button" id="testCaptureButton" type="button">收服卡</button>
+            <button class="secondary-button" id="testEvolutionButton" type="button">進化展示</button>
+          </div>
+          <button class="secondary-button test-exit-button" id="testExitButton" type="button">返回首頁</button>
+        </div>
+
+        <div class="answer-zone">
+          <div class="letter-bank" id="letterBank" aria-label="Letter choices"></div>
+        </div>
+
+        <div class="feedback-line" id="feedbackLine" aria-live="polite">聽發音，看中文，依序點字母。</div>
+      </section>
+
+      <section class="dex-overlay hidden" id="dexOverlay" aria-label="Monster collection">
+        <div class="dex-panel">
+          <header class="dex-header">
+            <div>
+              <p class="eyebrow">Monster Dex</p>
+              <h2>怪物圖鑑</h2>
+            </div>
+            <button class="icon-button" id="dexCloseButton" type="button" title="關閉圖鑑" aria-label="關閉圖鑑">
+              <span aria-hidden="true">×</span>
+            </button>
+          </header>
+          <div class="dex-summary" id="dexSummary">收服 0 / 30</div>
+          <div class="dex-grid" id="dexGrid"></div>
+        </div>
+      </section>
+
+      <section class="training-overlay hidden" id="trainingOverlay" aria-label="Vocabulary training">
+        <div class="training-panel">
+          <header class="dex-header">
+            <div>
+              <p class="eyebrow">Study Manual</p>
+              <h2>學習手冊</h2>
+            </div>
+            <button class="icon-button" id="trainingCloseButton" type="button" title="關閉單字訓練" aria-label="關閉單字訓練">
+              <span aria-hidden="true">×</span>
+            </button>
+          </header>
+
+          <div class="training-stats" id="trainingStats"></div>
+
+          <div class="training-actions">
+            <button class="primary-button large" id="allReviewButton" type="button">題庫複習</button>
+            <button class="secondary-button large" id="wrongPracticeButton" type="button">錯題重練</button>
+            <button class="secondary-button large" id="weakPracticeButton" type="button">未熟練習</button>
+            <button class="secondary-button large" id="masteredPracticeButton" type="button">已掌握複習</button>
+          </div>
+
+          <div class="training-list" id="trainingList"></div>
+        </div>
+      </section>
+
+      <section class="region-map-overlay hidden" id="regionMapOverlay" aria-label="Region map">
+        <div class="region-map-panel">
+          <header class="dex-header">
+            <div>
+              <p class="eyebrow">Adventure Map</p>
+              <h2>地區地圖</h2>
+            </div>
+            <button class="icon-button" id="regionMapCloseButton" type="button" title="關閉地圖" aria-label="關閉地圖">
+              <span aria-hidden="true">×</span>
+            </button>
+          </header>
+          <div class="region-map-summary" id="regionMapSummary">選擇目前可挑戰的地區。</div>
+          <div class="region-map-grid" id="regionMapGrid"></div>
+          <div class="region-map-actions">
+            <button class="secondary-button large" id="regionMapBackButton" type="button">回首頁</button>
+            <button class="primary-button large" id="regionMapStartButton" type="button">從目前地區出發</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="run-summary-overlay hidden" id="runSummaryOverlay" aria-label="Run summary">
+        <div class="run-summary-panel">
+          <p class="eyebrow">Quest Clear</p>
+          <h2 id="runSummaryTitle">遠征完成！</h2>
+          <p id="runSummaryText">擊敗 Boss，完成這一局。</p>
+          <div class="summary-rank">
+            <div class="summary-medal" id="summaryMedal">A</div>
+            <div class="summary-rank-copy">
+              <strong id="summaryRankTitle">遠征成功</strong>
+              <span id="summaryRankDetail">表現穩定，繼續累積熟練度。</span>
+            </div>
+          </div>
+          <div class="capture-showcase" id="captureShowcase"></div>
+          <div class="reward-highlights" id="rewardHighlights"></div>
+          <div class="summary-grid" id="runSummaryStats"></div>
+          <div class="wrong-review" id="wrongReview">
+            <h3>本局錯題</h3>
+            <div class="wrong-list" id="wrongList"></div>
+          </div>
+          <div class="summary-actions">
+            <button class="primary-button large" id="nextRunButton" type="button">下一局</button>
+            <button class="secondary-button large" id="retryWrongButton" type="button">重練錯題</button>
+            <button class="secondary-button large" id="summaryDexButton" type="button">看圖鑑</button>
+            <button class="secondary-button large" id="summaryHomeButton" type="button">回首頁</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="start-overlay" id="startOverlay" aria-label="Start game">
+        <div class="start-panel home-panel">
+          <p class="eyebrow">Spell Quest</p>
+          <h2 id="startTitle">單字怪獸遠征</h2>
+          <p id="loadSummary">正在準備題庫...</p>
+          <div class="region-card" id="regionCard">
+            <div class="region-card-visual" id="regionCardVisual" aria-hidden="true"></div>
+            <div class="region-card-body">
+              <span class="region-card-label">下一站</span>
+              <div class="region-info">
+                <strong id="regionName">沙漠入口</strong>
+                <span id="regionMeta">L01-L05 · 0 / 5</span>
+              </div>
+              <div class="region-progress" id="regionProgress" aria-label="地區進度"></div>
+            </div>
+          </div>
+          <div class="home-actions">
+            <button class="primary-button large" id="startButton" type="button" disabled>開始冒險</button>
+            <button class="secondary-button large" id="trainingButton" type="button">學習手冊</button>
+            <button class="secondary-button large" id="homeDexButton" type="button">怪物圖鑑</button>
+            <button class="secondary-button large" id="scoutToggleButton" type="button">偵查 ON</button>
+            <button class="secondary-button large" id="musicButton" type="button">音樂 ON</button>
+          </div>
+          <div class="home-dev-actions">
+            <button class="secondary-button test-button" id="monsterTestButton" type="button">怪物戰鬥測試</button>
+          </div>
+          <div class="menu-tips">
+            <span>15 場遠征</span>
+            <span>3 段進化</span>
+            <span>錯題重練</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="assets/data/vocabulary.js"></script>
+    <script src="game.js"></script>
+  </body>
+</html>

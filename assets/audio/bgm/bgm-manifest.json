@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "basePath": "assets/audio/bgm/",
+  "preferredFormat": "mp3",
+  "tracks": [
+    {
+      "id": "title",
+      "file": "bgm-01-title-theme.mp3",
+      "nameZh": "首頁主題曲",
+      "use": "home",
+      "loop": true,
+      "targetBpm": "118-128",
+      "notes": "Bright adventure opening, memorable main theme."
+    },
+    {
+      "id": "study",
+      "file": "bgm-02-study-manual.mp3",
+      "nameZh": "學習手冊",
+      "use": "study",
+      "loop": true,
+      "targetBpm": "85-105",
+      "notes": "Calm review music for handbook, mastery, and monster dex."
+    },
+    {
+      "id": "grassland",
+      "file": "bgm-03-sunny-grassland.mp3",
+      "nameZh": "陽光草原",
+      "regionTheme": "grassland",
+      "use": "battle-region",
+      "loop": true,
+      "targetBpm": "125-135",
+      "notes": "Fresh beginner battle theme."
+    },
+    {
+      "id": "forest",
+      "file": "bgm-04-candy-forest.mp3",
+      "nameZh": "糖果森林",
+      "regionTheme": "forest",
+      "use": "battle-region",
+      "loop": true,
+      "targetBpm": "120-132",
+      "notes": "Whimsical candy forest battle theme."
+    },
+    {
+      "id": "ice",
+      "file": "bgm-05-crystal-ice-cave.mp3",
+      "nameZh": "水晶冰洞",
+      "regionTheme": "ice",
+      "use": "battle-region",
+      "loop": true,
+      "targetBpm": "110-124",
+      "notes": "Shimmering and focused ice cave battle theme."
+    },
+    {
+      "id": "machine",
+      "file": "bgm-06-mechanical-city.mp3",
+      "nameZh": "機械都市",
+      "regionTheme": "machine",
+      "use": "battle-region",
+      "loop": true,
+      "targetBpm": "135-145",
+      "notes": "Driving cyber pixel battle theme."
+    },
+    {
+      "id": "astral",
+      "file": "bgm-07-astral-ruins.mp3",
+      "nameZh": "星界遺跡",
+      "regionTheme": "astral",
+      "use": "battle-region",
+      "loop": true,
+      "targetBpm": "122-138",
+      "notes": "Cosmic final-area battle theme."
+    },
+    {
+      "id": "boss",
+      "file": "bgm-08-boss-battle.mp3",
+      "nameZh": "Boss 戰",
+      "use": "battle-boss",
+      "loop": true,
+      "targetBpm": "145-158",
+      "notes": "Intense heroic boss music, exciting but not scary."
+    }
+  ]
+}

@@ -3,6 +3,15 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <!-- PWA-START -->
+    <meta name="theme-color" content="#101827">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" type="image/png" sizes="64x64" href="assets/icons/favicon-64.png">
+    <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+    <!-- PWA-END -->
     <title>Spell Quest</title>
     <link rel="stylesheet" href="style.css">
   </head>
@@ -318,6 +327,11 @@
             <button class="secondary-button large" id="scoutToggleButton" type="button">偵查 ON</button>
             <button class="secondary-button large" id="musicButton" type="button">音樂 ON</button>
           </div>
+          <div class="pwa-actions" id="pwaActions" hidden>
+            <button class="system-button" id="installAppButton" type="button" hidden>安裝遊戲</button>
+            <button class="system-button" id="fullscreenButton" type="button" hidden>進入全螢幕</button>
+            <span class="pwa-status" id="pwaStatus" aria-live="polite"></span>
+          </div>
           <div class="home-dev-actions">
             <button class="secondary-button test-button" id="monsterTestButton" type="button">怪物戰鬥測試</button>
           </div>
@@ -331,6 +345,9 @@
     </main>
 
     <script src="assets/data/vocabulary.js"></script>
+    <!-- PWA-START -->
+    <script src="pwa.js"></script>
+    <!-- PWA-END -->
     <script src="game.js"></script>
   </body>
 </html>

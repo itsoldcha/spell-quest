@@ -114,7 +114,9 @@ const bgm = Object.fromEntries(
 
 const assetScript = `window.SPELL_QUEST_ASSETS = ${JSON.stringify({ monsters, evolutions, monsterPacks, layers, bgm })};`;
 
-const standalone = html
+const androidHtml = html.replace(/<!-- PWA-START -->[\s\S]*?<!-- PWA-END -->/g, "");
+
+const standalone = androidHtml
   .replace('<link rel="stylesheet" href="style.css">', `<style>\n${css}\n</style>`)
   .replace('src="assets/monsters/monster-00.png"', `src="${monsters[0]}"`)
   .replace('<script src="assets/data/vocabulary.js"></script>', `<script>\n${escapeScript(vocabularyJs)}\n    </script>`)

@@ -22,6 +22,52 @@
   --monster-outline: #3e315f;
 }
 
+@media (display-mode: fullscreen), (display-mode: standalone) {
+  body {
+    background-color: #101827;
+  }
+}
+
+@supports (padding: max(0px)) {
+  .start-overlay {
+    padding:
+      max(16px, env(safe-area-inset-top))
+      max(16px, env(safe-area-inset-right))
+      max(16px, env(safe-area-inset-bottom))
+      max(16px, env(safe-area-inset-left));
+  }
+}
+
+@media (max-height: 760px) and (min-width: 721px) {
+  .start-panel {
+    padding: 18px 24px;
+  }
+
+  .start-panel h2 {
+    margin-bottom: 6px;
+    font-size: 2.2rem;
+  }
+
+  .home-actions {
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .pwa-actions {
+    min-height: 30px;
+    margin-top: 6px;
+  }
+
+  .system-button {
+    min-height: 30px;
+    padding-block: 4px;
+  }
+
+  .home-dev-actions {
+    margin-top: 6px;
+  }
+}
+
 /* Battle-integrated answer HUD v1. Keeps the playfield dominant while moving
    the core spelling interaction out of the old right-side tool panel. */
 body.battle-integrated-ui .arena-frame {
@@ -755,6 +801,7 @@ body.battle-integrated-ui.monster-test-mode .monster-test-panel {
 html,
 body {
   min-height: 100%;
+  min-height: 100dvh;
 }
 
 body {
@@ -765,6 +812,7 @@ body {
     linear-gradient(180deg, rgba(17, 24, 38, 0.1), rgba(17, 24, 38, 0.2)),
     linear-gradient(180deg, #688ed5 0%, #d6a071 58%, #5e392a 100%);
   overflow: hidden;
+  overscroll-behavior: none;
   touch-action: manipulation;
   image-rendering: pixelated;
 }
@@ -779,6 +827,7 @@ button {
   grid-template-columns: minmax(0, 1fr) 410px;
   gap: 14px;
   height: 100vh;
+  height: 100dvh;
   padding: 12px;
 }
 
@@ -4183,6 +4232,51 @@ h1 {
   grid-column: 1 / -1;
 }
 
+.pwa-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 36px;
+  margin-top: 10px;
+}
+
+.pwa-actions[hidden],
+.pwa-actions button[hidden] {
+  display: none;
+}
+
+.system-button {
+  min-height: 34px;
+  padding: 6px 13px;
+  border: 2px solid #5b4937;
+  border-radius: 4px;
+  color: #f8edc8;
+  background: linear-gradient(180deg, rgba(55, 76, 108, 0.96), rgba(25, 36, 57, 0.96));
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.16),
+    0 3px 0 #162238;
+  font-size: 0.78rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.system-button:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.12),
+    0 1px 0 #162238;
+}
+
+.pwa-status {
+  flex-basis: 100%;
+  min-height: 1em;
+  color: #514b45;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
 .home-actions .test-button {
   background: linear-gradient(180deg, #9bf6ff, #4d8ff0);
   color: #10233d;
@@ -4596,6 +4690,10 @@ body.monster-test-mode .feedback-line {
 
   .home-dev-actions .test-button {
     width: 100%;
+  }
+
+  .pwa-actions {
+    margin-top: 8px;
   }
 
   .region-map-grid {

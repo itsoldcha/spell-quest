@@ -2118,7 +2118,7 @@ async function fetchLocalVocabularyRows() {
     return parseCsv(window.SPELL_QUEST_VOCABULARY_CSV);
   }
 
-  const response = await fetch(`${LOCAL_VOCABULARY_PATH}?cacheBust=${Date.now()}`, { cache: "no-store" });
+  const response = await fetch(LOCAL_VOCABULARY_PATH, { cache: "no-cache" });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
   }

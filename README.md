@@ -22,6 +22,8 @@ The current prototype is a static frontend project. It can run by opening `index
 - `style.css` - UI, layout, overlays, and responsive styling.
 - `game.js` - game logic, battle flow, progression, audio, and rendering.
 - `build-android.mjs` - generates `android.html` with assets embedded.
+- `build-pwa.mjs` - creates the deployable PWA in `dist/`.
+- `manifest.webmanifest` and `service-worker.js` - app installation and offline cache.
 - `assets/` - runtime-ready game art and audio assets.
 - `art-source/` - editable art sources tracked with Git LFS.
 - `local-output/` - ignored previews, diagnostics, backups, and generated builds.
@@ -41,6 +43,18 @@ node build-android.mjs
 ```
 
 Then copy/open `android.html` on the tablet.
+
+## PWA Build
+
+Create the deployable PWA:
+
+```powershell
+node build-pwa.mjs
+```
+
+The generated `dist/` folder is intentionally ignored by Git. GitHub Actions deploys the same build to GitHub Pages after changes are pushed to `main`.
+
+The installed PWA requests landscape fullscreen mode. When the game is opened in a normal browser tab, the home screen also offers a manual fullscreen button.
 
 ## Notes For Git
 

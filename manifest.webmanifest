@@ -7,7 +7,6 @@
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "orientation": "landscape",
   "background_color": "#101827",
   "theme_color": "#101827",
   "categories": ["education", "games"],

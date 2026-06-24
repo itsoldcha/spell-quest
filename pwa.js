@@ -22,36 +22,58 @@
   function refreshControls() {
     const canFullscreen = Boolean(document.documentElement.requestFullscreen);
     installButton.hidden = isInstalled() || !installPrompt;
-    fullscreenButton.hidden = isInstalled() || !canFullscreen;
+    fullscreenButton.hidden = !canFullscreen;
     fullscreenButton.textContent = isFullscreen() ? "離開全螢幕" : "進入全螢幕";
     actions.hidden = installButton.hidden && fullscreenButton.hidden && !status.textContent;
   }
 
-  async function toggleFullscreen() {
+  async function enterFullscreen() {
+    if (isFullscreen()) {
+      return true;
+    }
+
     try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
-      } else {
-        try {
-          await document.documentElement.requestFullscreen({ navigationUI: "hide" });
-        } catch {
-          await document.documentElement.requestFullscreen();
-        }
-        if (screen.orientation?.lock) {
-          await screen.orientation.lock("landscape").catch(() => {});
-        }
+      try {
+        await document.documentElement.requestFullscreen({ navigationUI: "hide" });
+      } catch {
+        await document.documentElement.requestFullscreen();
+      }
+      if (screen.orientation?.lock) {
+        await screen.orientation.lock("landscape").catch(() => {});
       }
       status.textContent = "";
+      refreshControls();
+      return true;
     } catch {
-      status.textContent = "瀏覽器無法切換全螢幕，請改用安裝版。";
+      return false;
+    }
+  }
+
+  async function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen().catch(() => {});
+      refreshControls();
+      return;
+    }
+
+    const entered = await enterFullscreen();
+    if (!entered) {
+      status.textContent = "瀏覽器無法切換全螢幕，仍可繼續遊玩。";
     }
     refreshControls();
   }
 
+  window.spellQuestEnterFullscreen = () => {
+    if (!isInstalled()) {
+      return Promise.resolve(false);
+    }
+    return enterFullscreen();
+  };
+
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     installPrompt = event;
-    status.textContent = "可安裝到平板桌面，以全螢幕模式遊玩。";
+    status.textContent = "可安裝到平板桌面，以獨立應用程式模式遊玩。";
     refreshControls();
   });
 

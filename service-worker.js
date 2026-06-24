@@ -1,4 +1,4 @@
-const CACHE_VERSION = "spell-quest-v1";
+const CACHE_VERSION = "spell-quest-v2";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const MEDIA_CACHE = `${CACHE_VERSION}-media`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;

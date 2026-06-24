@@ -5258,10 +5258,18 @@ function startGame() {
   startNormalRun(true);
 }
 
-els.startButton.addEventListener("click", openAdventureMap);
+els.startButton.addEventListener("click", () => {
+  initAudio();
+  startMusic("title");
+  window.spellQuestEnterFullscreen?.();
+  openAdventureMap();
+});
 els.regionMapCloseButton.addEventListener("click", closeRegionMap);
 els.regionMapBackButton.addEventListener("click", closeRegionMap);
 els.regionMapStartButton.addEventListener("click", () => {
+  initAudio();
+  startMusic();
+  window.spellQuestEnterFullscreen?.();
   closeRegionMap();
   startGame();
 });

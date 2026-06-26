@@ -21,6 +21,61 @@ const WRONG_DAMAGE = 1;
 const LETTER_DAMAGE_SHARE = 0.58;
 const SPEECH_LANG = "en-US";
 const SAVE_KEY = "spellQuestProgressV1";
+const ANSWER_MODE_STANDARD = "standard";
+const ANSWER_MODE_SHUFFLE = "shuffle";
+const ANSWER_MODE_ODD = "odd";
+const ANSWER_MODE_TIMED = "timed";
+const ANSWER_MODE_MIXED = "mixed";
+const ANSWER_MODE_LABELS = {
+  [ANSWER_MODE_STANDARD]: "標準拼字",
+  [ANSWER_MODE_SHUFFLE]: "動態鎖定",
+  [ANSWER_MODE_ODD]: "辨識防禦",
+  [ANSWER_MODE_TIMED]: "限時拼字",
+  [ANSWER_MODE_MIXED]: "混合試煉"
+};
+const ANSWER_MODE_CUES = {
+  [ANSWER_MODE_STANDARD]: {
+    icon: "◎",
+    kicker: "攻擊模式",
+    title: "依序消字",
+    detail: "依序點擊正確字母，命中的字母會消失",
+    demo: "C　A　T　→　點 C　→　剩下 A　T",
+    tone: "modeStandard"
+  },
+  [ANSWER_MODE_SHUFFLE]: {
+    icon: "⌖",
+    kicker: "鎖定模式",
+    title: "找到下一個字母",
+    detail: "每次命中後，選項都會重新洗牌",
+    demo: "選 C → 重新洗牌 → 選 A → 再洗牌",
+    tone: "modeShuffle"
+  },
+  [ANSWER_MODE_ODD]: {
+    icon: "◇",
+    kicker: "防禦模式",
+    title: "找出多餘字母",
+    detail: "只有一個字母不屬於答案",
+    demo: "C　A　T　K　→　選出 K",
+    tone: "modeOdd"
+  },
+  [ANSWER_MODE_TIMED]: {
+    icon: "!",
+    kicker: "壓力模式",
+    title: "限時拼字",
+    detail: "在能量耗盡前完成答案",
+    demo: "3　2　1　→　時間內完成拼字",
+    tone: "modeTimed"
+  }
+};
+const TOWER_ROOM_SEQUENCE = [
+  { name: "暖身室", mode: ANSWER_MODE_STANDARD, stage: "baby", actIndex: 0 },
+  { name: "鎖定室", mode: ANSWER_MODE_SHUFFLE, stage: "baby", actIndex: 0 },
+  { name: "識破室", mode: ANSWER_MODE_ODD, stage: "rookie", actIndex: 1 },
+  { name: "壓力室", mode: ANSWER_MODE_TIMED, stage: "rookie", actIndex: 1 },
+  { name: "混合室", mode: ANSWER_MODE_MIXED, stage: "ultimate", actIndex: 2 },
+  { name: "樓層守護者", mode: ANSWER_MODE_MIXED, stage: "ultimate", actIndex: 2, boss: true }
+];
+const TOWER_FLOOR_COUNT = 10;
 const REGION_UNLOCK_SEEN_TARGET = 20;
 const REGION_UNLOCK_STEADY_TARGET = 8;
 const REGION_INTRO_DURATION_MS = 2200;
@@ -283,6 +338,7 @@ const els = {
   hudMusicButton: document.getElementById("hudMusicButton"),
   homeButton: document.getElementById("homeButton"),
   dexButton: document.getElementById("dexButton"),
+  modeHelpButton: document.getElementById("modeHelpButton"),
   dexCloseButton: document.getElementById("dexCloseButton"),
   dexOverlay: document.getElementById("dexOverlay"),
   dexGrid: document.getElementById("dexGrid"),
@@ -350,7 +406,36 @@ const els = {
   loadSummary: document.getElementById("loadSummary"),
   stageTrack: document.getElementById("stageTrack"),
   masteryLabel: document.getElementById("masteryLabel"),
-  captureLabel: document.getElementById("captureLabel")
+  captureLabel: document.getElementById("captureLabel"),
+  questionModeStrip: document.getElementById("questionModeStrip"),
+  questionModeBadge: document.getElementById("questionModeBadge"),
+  battleWordLock: document.getElementById("battleWordLock"),
+  questionTimer: document.getElementById("questionTimer"),
+  questionTimerText: document.getElementById("questionTimerText"),
+  questionTimerFill: document.getElementById("questionTimerFill"),
+  timedPressureText: document.getElementById("timedPressureText"),
+  modeCue: document.getElementById("modeCue"),
+  modeCueKicker: document.getElementById("modeCueKicker"),
+  modeCueIcon: document.getElementById("modeCueIcon"),
+  modeCueTitle: document.getElementById("modeCueTitle"),
+  modeCueDetail: document.getElementById("modeCueDetail"),
+  modeTutorial: document.getElementById("modeTutorial"),
+  modeTutorialKicker: document.getElementById("modeTutorialKicker"),
+  modeTutorialIcon: document.getElementById("modeTutorialIcon"),
+  modeTutorialTitle: document.getElementById("modeTutorialTitle"),
+  modeTutorialDetail: document.getElementById("modeTutorialDetail"),
+  modeTutorialDemo: document.getElementById("modeTutorialDemo"),
+  modeTutorialNote: document.getElementById("modeTutorialNote"),
+  modeTutorialStartButton: document.getElementById("modeTutorialStartButton"),
+  letterEnergyLayer: document.getElementById("letterEnergyLayer"),
+  oddDefenseField: document.getElementById("oddDefenseField"),
+  towerButton: document.getElementById("towerButton"),
+  towerOverlay: document.getElementById("towerOverlay"),
+  towerCloseButton: document.getElementById("towerCloseButton"),
+  towerBackButton: document.getElementById("towerBackButton"),
+  towerStartButton: document.getElementById("towerStartButton"),
+  towerFloorGrid: document.getElementById("towerFloorGrid"),
+  towerFloorRecord: document.getElementById("towerFloorRecord")
 };
 
 const ctx = els.canvas.getContext("2d");
@@ -773,6 +858,26 @@ let scoutContinueCallback = null;
 let scoutOverlayMode = "prompt";
 let encounterFlowId = 0;
 let monsterQueue = [];
+let currentAnswerMode = ANSWER_MODE_STANDARD;
+let oddAnswerMatch = "";
+let questionTimerId = 0;
+let questionTimerDeadline = 0;
+let questionTimerDuration = 0;
+let questionTimerRatio = 1;
+let timedWarningStage = 0;
+let timedCompletionRatio = 1;
+let modeCueTimer = 0;
+let activeTowerFloor = 1;
+let modeTutorialContinue = null;
+let modeTutorialMode = ANSWER_MODE_STANDARD;
+let modeTutorialGuided = false;
+let guidedTutorialQuestion = false;
+let guidedTutorialMistakeUsed = false;
+let lastBriefModeCueKey = "";
+let standardFxTimers = [];
+let standardDisplayedLetterCount = 0;
+let shuffleFxTimers = [];
+let oddFxTimers = [];
 
 function parseCsv(text) {
   const rows = [];
@@ -852,7 +957,9 @@ function loadProgress() {
       recentWords: Array.isArray(parsed.recentWords) ? parsed.recentWords.slice(-RECENT_WORD_LIMIT) : [],
       unlockedRegion: clampNumber(parsed.unlockedRegion, 0, REGIONS.length - 1, 0),
       currentRegion: clampNumber(parsed.currentRegion, 0, REGIONS.length - 1, clampNumber(parsed.unlockedRegion, 0, REGIONS.length - 1, 0)),
-      scoutEnabled: parsed.scoutEnabled !== false
+      scoutEnabled: parsed.scoutEnabled !== false,
+      tower: normalizeTowerProgress(parsed.tower),
+      tutorials: normalizeTutorialProgress(parsed.tutorials)
     };
   } catch (error) {
     console.warn("Progress reset because saved data was invalid.", error);
@@ -869,7 +976,36 @@ function createEmptyProgress() {
     recentWords: [],
     unlockedRegion: 0,
     currentRegion: 0,
-    scoutEnabled: true
+    scoutEnabled: true,
+    tower: normalizeTowerProgress(),
+    tutorials: normalizeTutorialProgress()
+  };
+}
+
+function normalizeTowerProgress(raw = {}) {
+  const floors = raw.floors && typeof raw.floors === "object" ? raw.floors : {};
+  return {
+    highestUnlocked: clampNumber(raw.highestUnlocked, 1, TOWER_FLOOR_COUNT, 1),
+    cores: Math.max(0, Number(raw.cores) || 0),
+    floors
+  };
+}
+
+function normalizeTutorialProgress(raw = {}) {
+  return {
+    [ANSWER_MODE_STANDARD]: raw[ANSWER_MODE_STANDARD] === true,
+    [ANSWER_MODE_SHUFFLE]: raw[ANSWER_MODE_SHUFFLE] === true,
+    [ANSWER_MODE_ODD]: raw[ANSWER_MODE_ODD] === true,
+    [ANSWER_MODE_TIMED]: raw[ANSWER_MODE_TIMED] === true
+  };
+}
+
+function normalizeModeProgress(raw = {}) {
+  return {
+    correct: Math.max(0, Number(raw.correct) || 0),
+    wrong: Math.max(0, Number(raw.wrong) || 0),
+    streak: Math.max(0, Number(raw.streak) || 0),
+    mastered: raw.mastered === true
   };
 }
 
@@ -908,7 +1044,10 @@ function createRunStats() {
     materialsAwarded: false,
     maxCombo: 0,
     wrongQuestions: [],
-    rewards: []
+    rewards: [],
+    modeCorrect: {},
+    towerCores: 0,
+    towerFloor: 0
   };
 }
 
@@ -923,8 +1062,10 @@ function saveProgress() {
 function getWordProgress(question) {
   const key = getWordKey(question);
   if (!progress.words[key]) {
-    progress.words[key] = { correct: 0, wrong: 0, streak: 0, seen: 0, mastered: false };
+    progress.words[key] = { correct: 0, wrong: 0, streak: 0, seen: 0, mastered: false, modes: {} };
   }
+  const item = progress.words[key];
+  item.modes = item.modes && typeof item.modes === "object" ? item.modes : {};
   return progress.words[key];
 }
 
@@ -934,14 +1075,22 @@ function getWordKey(question) {
 
 function recordWordResult(question, isCorrect) {
   const item = getWordProgress(question);
+  const mode = currentAnswerMode || ANSWER_MODE_STANDARD;
+  const modeProgress = normalizeModeProgress(item.modes[mode]);
   item.seen += 1;
   if (isCorrect) {
     item.correct += 1;
     item.streak += 1;
+    modeProgress.correct += 1;
+    modeProgress.streak += 1;
   } else {
     item.wrong += 1;
     item.streak = 0;
+    modeProgress.wrong += 1;
+    modeProgress.streak = 0;
   }
+  modeProgress.mastered = modeProgress.correct >= 2 && modeProgress.streak >= 2;
+  item.modes[mode] = modeProgress;
   item.mastered = item.streak >= 3 && item.correct >= 3;
   rememberRecentWord(question);
   saveProgress();
@@ -958,6 +1107,12 @@ function rememberRecentWord(question) {
 
 function getMasteryText(question) {
   const item = getWordProgress(question);
+  if (activeRunMode === "tower") {
+    const mode = getResolvedAnswerMode();
+    const modeProgress = normalizeModeProgress(item.modes[mode]);
+    const status = modeProgress.mastered ? "已通過" : `${modeProgress.correct}/2`;
+    return `${ANSWER_MODE_LABELS[mode]} ${status}`;
+  }
   if (item.mastered) {
     return `熟練度 已掌握 (${item.streak}連)`;
   }
@@ -1169,6 +1324,18 @@ function getMonsterIndex(index = stageIndex) {
 }
 
 function getRunActInfo(encounterIndex = runEncounterIndex) {
+  if (activeRunMode === "tower") {
+    const room = TOWER_ROOM_SEQUENCE[Math.min(encounterIndex, TOWER_ROOM_SEQUENCE.length - 1)] || TOWER_ROOM_SEQUENCE[0];
+    return {
+      name: room.name,
+      stage: room.stage,
+      rewardScale: 1 + room.actIndex * 0.3,
+      actIndex: room.actIndex,
+      localIndex: encounterIndex,
+      label: `${room.name} ${encounterIndex + 1}/${TOWER_ROOM_SEQUENCE.length}`,
+      mode: room.mode
+    };
+  }
   const actIndex = Math.max(0, Math.min(RUN_ACTS.length - 1, Math.floor(encounterIndex / ENCOUNTERS_PER_ACT)));
   const act = RUN_ACTS[actIndex] || RUN_ACTS[0];
   const localIndex = encounterIndex % ENCOUNTERS_PER_ACT;
@@ -1414,6 +1581,11 @@ function awardRunCompletionMaterials() {
   if (runStats.materialsAwarded) {
     return runStats.materials;
   }
+  if (activeRunMode === "tower") {
+    runStats.materials = { candy: 0, energy: 0, shards: 0 };
+    runStats.materialsAwarded = true;
+    return runStats.materials;
+  }
   const totalAttempts = runStats.correct + runStats.wrong;
   const accuracy = totalAttempts ? runStats.correct / totalAttempts : 0;
   const completionScale = activeRunMode === "adventure" ? 1 : Math.max(0.28, activeEncounterCount / ENCOUNTERS_PER_RUN);
@@ -1651,6 +1823,66 @@ function openRegionMap() {
 
 function closeRegionMap() {
   els.regionMapOverlay?.classList.add("hidden");
+}
+
+function openTower() {
+  if (!questions.length) {
+    return;
+  }
+  renderTower();
+  els.towerOverlay?.classList.remove("hidden");
+}
+
+function closeTower() {
+  els.towerOverlay?.classList.add("hidden");
+}
+
+function getTowerFloorRecord(floor = 1) {
+  progress.tower = normalizeTowerProgress(progress.tower);
+  return progress.tower.floors[String(floor)] || null;
+}
+
+function renderTower() {
+  if (!els.towerFloorGrid || !els.towerFloorRecord) {
+    return;
+  }
+  progress.tower = normalizeTowerProgress(progress.tower);
+  activeTowerFloor = clampNumber(activeTowerFloor, 1, progress.tower.highestUnlocked, 1);
+  const setTowerSelection = (floor) => {
+    activeTowerFloor = floor;
+    const record = getTowerFloorRecord(floor);
+    els.towerFloorRecord.textContent = record
+      ? `第 ${floor} 層 · 最佳 ${record.bestRank || "C"} · 通關 ${record.clears || 0} 次 · 試煉晶核 ${progress.tower.cores}`
+      : `第 ${floor} 層 · 尚未挑戰 · 試煉晶核 ${progress.tower.cores}`;
+    if (els.towerStartButton) {
+      els.towerStartButton.textContent = `挑戰第 ${floor} 層`;
+    }
+  };
+  setTowerSelection(activeTowerFloor);
+  els.towerFloorGrid.replaceChildren();
+  for (let floor = 1; floor <= TOWER_FLOOR_COUNT; floor += 1) {
+    const button = document.createElement("button");
+    const hasQuestions = getTowerFloorQuestions(floor).length > 0;
+    const available = floor <= progress.tower.highestUnlocked && hasQuestions;
+    const floorRecord = getTowerFloorRecord(floor);
+    button.type = "button";
+    button.className = "tower-floor-node";
+    button.disabled = !available;
+    button.dataset.state = available ? (floor === activeTowerFloor ? "selected" : "open") : "locked";
+    button.innerHTML = `<span>${floor}</span><small>${available ? (floorRecord?.bestRank || "OPEN") : (hasQuestions ? "LOCK" : "NO DATA")}</small>`;
+    if (available) {
+      button.addEventListener("click", () => {
+        setTowerSelection(floor);
+        els.towerFloorGrid.querySelectorAll(".tower-floor-node").forEach((node) => {
+          if (node.dataset.state !== "locked") {
+            node.dataset.state = node === button ? "selected" : "open";
+          }
+        });
+      });
+    }
+    els.towerFloorGrid.appendChild(button);
+  }
+  els.towerStartButton.disabled = questions.length === 0;
 }
 
 function renderRegionMap() {
@@ -2013,6 +2245,83 @@ function buildRunStages(items, encounterCount, label = "遠征") {
   }).filter((stage) => stage.questions.length > 0);
 }
 
+function getTowerFloorQuestions(floor = 1) {
+  const startChapter = (floor - 1) * 5 + 1;
+  const chapters = new Set(
+    Array.from({ length: 5 }, (_, index) => `l${String(startChapter + index).padStart(2, "0")}`)
+  );
+  return questions.filter((item) => chapters.has(String(item.chapter).toLowerCase()));
+}
+
+function getModeProgress(question, mode) {
+  const item = getWordProgress(question);
+  return normalizeModeProgress(item.modes[mode]);
+}
+
+function buildTowerQuestionSet(items, mode, usedKeys) {
+  const resolvedModes = mode === ANSWER_MODE_MIXED
+    ? [ANSWER_MODE_SHUFFLE, ANSWER_MODE_ODD, ANSWER_MODE_TIMED]
+    : [mode];
+  const scored = shuffle(items).sort((a, b) => {
+    const score = (question) => {
+      const weakest = Math.min(...resolvedModes.map((itemMode) => {
+        const modeProgress = getModeProgress(question, itemMode);
+        return modeProgress.mastered ? 4 : modeProgress.correct - modeProgress.wrong;
+      }));
+      const recentPenalty = progress.recentWords?.includes(getWordKey(question)) ? 3 : 0;
+      const usedPenalty = usedKeys.has(getWordKey(question)) ? 6 : 0;
+      return weakest + recentPenalty + usedPenalty;
+    };
+    return score(a) - score(b);
+  });
+  const picked = [];
+  for (const question of scored) {
+    if (picked.length >= QUESTIONS_PER_STAGE) {
+      break;
+    }
+    const key = getWordKey(question);
+    if (!usedKeys.has(key) || picked.length >= Math.min(3, items.length)) {
+      picked.push(question);
+      usedKeys.add(key);
+    }
+  }
+  return picked.length ? picked : pickWeightedQuestions(items, QUESTIONS_PER_STAGE);
+}
+
+function buildTowerStages(floor = 1) {
+  const items = getTowerFloorQuestions(floor);
+  const usedKeys = new Set();
+  return TOWER_ROOM_SEQUENCE.map((room, index) => ({
+    chapter: `第 ${floor} 層｜${room.name}`,
+    act: room,
+    answerMode: room.mode,
+    questions: buildTowerQuestionSet(items, room.mode, usedKeys),
+    towerRoomIndex: index
+  })).filter((stage) => stage.questions.length > 0);
+}
+
+function startTowerFloor(floor = 1) {
+  const tower = normalizeTowerProgress(progress.tower);
+  const safeFloor = clampNumber(floor, 1, tower.highestUnlocked, 1);
+  const floorQuestions = getTowerFloorQuestions(safeFloor);
+  if (!floorQuestions.length) {
+    return;
+  }
+  activeTowerFloor = safeFloor;
+  activeRunMode = "tower";
+  activeEncounterCount = TOWER_ROOM_SEQUENCE.length;
+  stages = buildTowerStages(safeFloor);
+  monsterQueue = buildMonsterQueue(activeEncounterCount, Math.min(REGIONS.length - 1, Math.floor((safeFloor - 1) / 2)));
+  started = true;
+  initAudio();
+  startMusic(getRegionMusicTrackId(Math.min(REGIONS.length - 1, Math.floor((safeFloor - 1) / 2))));
+  closeTower();
+  els.startOverlay.classList.add("hidden");
+  resetRun(true);
+  runStats.towerFloor = safeFloor;
+  showBanner(`第 ${safeFloor} 層試煉開始！`);
+}
+
 function buildRunQuestionSet(items, usedKeys) {
   const picked = [];
   const localKeys = new Set();
@@ -2111,6 +2420,9 @@ async function loadQuestions() {
     renderTrainingPanel("all");
   }
   els.startButton.disabled = false;
+  if (els.towerButton) {
+    els.towerButton.disabled = false;
+  }
 }
 
 async function fetchLocalVocabularyRows() {
@@ -2129,6 +2441,9 @@ function setLoading(text) {
   els.sourceStatus.textContent = text;
   els.loadSummary.textContent = text;
   els.startButton.disabled = true;
+  if (els.towerButton) {
+    els.towerButton.disabled = true;
+  }
 }
 
 function buildStages(items) {
@@ -2157,6 +2472,14 @@ function resetRun(showIntro = true) {
   runEncounterIndex = 0;
   runStats = createRunStats();
   playerHp = PLAYER_HP_MAX;
+  guidedTutorialQuestion = false;
+  guidedTutorialMistakeUsed = false;
+  lastBriefModeCueKey = "";
+  clearStandardLetterFx();
+  clearShuffleFx();
+  clearOddFx();
+  clearTimedModeFx();
+  hideModeTutorial();
   rewardRequestId += 1;
   els.rewardPop?.classList.remove("active");
   els.captureCard?.classList.add("hidden");
@@ -2343,6 +2666,9 @@ function triggerMonsterTestAction(action) {
 }
 
 function setupStage(showIntro = true) {
+  stopQuestionTimer();
+  hideModeCue();
+  document.body.classList.add("question-input-locked");
   const flowId = ++encounterFlowId;
   const boss = isBossEncounter();
   setBattlePhase("listen");
@@ -2406,7 +2732,7 @@ function getStage() {
 }
 
 function isScoutEnabled() {
-  return started && progress.scoutEnabled !== false && !battleTestMode;
+  return started && activeRunMode !== "tower" && progress.scoutEnabled !== false && !battleTestMode;
 }
 
 function getScoutStatus(question) {
@@ -2545,13 +2871,23 @@ function loadQuestion() {
     return;
   }
 
+  clearStandardLetterFx();
+  clearShuffleFx();
+  clearOddFx();
+  standardDisplayedLetterCount = 0;
+  stopQuestionTimer();
+  clearTimedModeFx();
+  hideModeCue();
+  document.body.classList.add("question-input-locked");
   setBattlePhase("listen");
   setWordLockVisible(false);
   const stage = getStage();
   currentQuestion = stage.questions[questionIndex % stage.questions.length];
+  currentAnswerMode = getResolvedAnswerMode(stage);
   answerTokens = tokenizeAnswer(currentQuestion.en);
   answerLetters = answerTokens.filter((token) => token.kind === "letter");
   selectedLetters = [];
+  oddAnswerMatch = "";
   currentQuestionDamage = createQuestionDamagePlan();
   acceptingInput = playerHp > 0;
   renderQuestion();
@@ -2594,15 +2930,176 @@ function getAnswerLetters(answer) {
     .map((char) => char.toLowerCase());
 }
 
+function getResolvedAnswerMode(stage = getStage()) {
+  if (activeRunMode === "adventure" && getCurrentRegionIndex() === 0) {
+    const tutorialEncounters = {
+      1: ANSWER_MODE_SHUFFLE,
+      5: ANSWER_MODE_ODD,
+      10: ANSWER_MODE_TIMED
+    };
+    if (tutorialEncounters[runEncounterIndex]) {
+      return tutorialEncounters[runEncounterIndex];
+    }
+  }
+  const configured = stage?.answerMode || ANSWER_MODE_STANDARD;
+  if (configured !== ANSWER_MODE_MIXED) {
+    return configured;
+  }
+  const mixedModes = [ANSWER_MODE_SHUFFLE, ANSWER_MODE_ODD, ANSWER_MODE_TIMED];
+  return mixedModes[questionIndex % mixedModes.length];
+}
+
+function getAnswerModeInstruction(mode = currentAnswerMode) {
+  if (mode === ANSWER_MODE_SHUFFLE) {
+    return "每次鎖定下一個字母，選項會重新洗牌。";
+  }
+  if (mode === ANSWER_MODE_ODD) {
+    return "找出不屬於這個英文單字的字母。";
+  }
+  if (mode === ANSWER_MODE_TIMED) {
+    return "在能量耗盡前完成拼字。";
+  }
+  return "聽發音，看中文，依序點字母。";
+}
+
+function updateQuestionModeUi() {
+  document.body.dataset.answerMode = currentAnswerMode;
+  if (els.questionModeBadge) {
+    const cue = ANSWER_MODE_CUES[currentAnswerMode] || ANSWER_MODE_CUES[ANSWER_MODE_STANDARD];
+    els.questionModeBadge.textContent = `${cue.icon} ${ANSWER_MODE_LABELS[currentAnswerMode] || ANSWER_MODE_LABELS[ANSWER_MODE_STANDARD]}`;
+    els.questionModeBadge.dataset.mode = currentAnswerMode;
+  }
+  if (els.questionModeStrip) {
+    els.questionModeStrip.dataset.mode = currentAnswerMode;
+  }
+  if (els.modeHelpButton) {
+    const canShowHelp = started;
+    els.modeHelpButton.classList.toggle("hidden", !canShowHelp);
+  }
+  const timed = currentAnswerMode === ANSWER_MODE_TIMED;
+  els.questionTimer?.classList.toggle("hidden", !timed);
+  if (!timed && els.questionTimerFill) {
+    els.questionTimerFill.style.width = "100%";
+  }
+}
+
+function hideModeCue() {
+  if (modeCueTimer) {
+    window.clearTimeout(modeCueTimer);
+    modeCueTimer = 0;
+  }
+  document.body.classList.remove("mode-cue-active");
+  els.modeCue?.classList.remove("active", "compact");
+  els.modeCue?.classList.add("hidden");
+}
+
+function showModeCue({ compact = false, mixed = false } = {}) {
+  if (!els.modeCue) {
+    return;
+  }
+  hideModeCue();
+  const cue = ANSWER_MODE_CUES[currentAnswerMode] || ANSWER_MODE_CUES[ANSWER_MODE_STANDARD];
+  els.modeCue.dataset.mode = currentAnswerMode;
+  els.modeCueKicker.textContent = mixed ? "Boss 規則切換" : cue.kicker;
+  els.modeCueIcon.textContent = cue.icon;
+  els.modeCueTitle.textContent = cue.title;
+  els.modeCueDetail.textContent = cue.detail;
+  els.modeCue.classList.toggle("compact", compact);
+  els.modeCue.classList.remove("hidden");
+  document.body.classList.add("mode-cue-active");
+  void els.modeCue.offsetWidth;
+  els.modeCue.classList.add("active");
+  playTone(cue.tone);
+  modeCueTimer = window.setTimeout(hideModeCue, compact ? 460 : 1020);
+}
+
+function hideModeTutorial({ resume = false } = {}) {
+  const continueBattle = modeTutorialContinue;
+  modeTutorialContinue = null;
+  modeTutorialGuided = false;
+  els.modeTutorial?.classList.remove("active");
+  els.modeTutorial?.classList.add("hidden");
+  document.body.classList.remove("mode-tutorial-active");
+  if (resume && typeof continueBattle === "function") {
+    continueBattle();
+  }
+}
+
+function showModeTutorial({
+  mode = currentAnswerMode,
+  guided = false,
+  onContinue = null
+} = {}) {
+  const cue = ANSWER_MODE_CUES[mode] || ANSWER_MODE_CUES[ANSWER_MODE_STANDARD];
+  hideModeCue();
+  stopQuestionTimer();
+  acceptingInput = false;
+  document.body.classList.add("question-input-locked", "mode-tutorial-active");
+  modeTutorialMode = mode;
+  modeTutorialGuided = guided;
+  modeTutorialContinue = onContinue;
+  if (guided) {
+    guidedTutorialQuestion = true;
+    guidedTutorialMistakeUsed = false;
+  }
+
+  els.modeTutorial.dataset.mode = mode;
+  els.modeTutorialKicker.textContent = guided ? "新戰鬥規則" : "規則確認";
+  els.modeTutorialIcon.textContent = cue.icon;
+  els.modeTutorialTitle.textContent = cue.title;
+  els.modeTutorialDetail.textContent = cue.detail;
+  els.modeTutorialDemo.textContent = cue.demo || cue.detail;
+  els.modeTutorialNote.textContent = guided
+    ? "第一題答錯一次不會扣血，放心試試看。"
+    : "關閉後會重新開始本題的作答時間。";
+  els.modeTutorialStartButton.textContent = guided ? "開始練習" : "繼續挑戰";
+  els.modeTutorial.classList.remove("hidden");
+  void els.modeTutorial.offsetWidth;
+  els.modeTutorial.classList.add("active");
+  playTone(cue.tone);
+}
+
+function finishModeTutorial() {
+  if (modeTutorialGuided) {
+    progress.tutorials[modeTutorialMode] = true;
+    saveProgress();
+  }
+  hideModeTutorial({ resume: true });
+}
+
+function shouldTeachCurrentMode() {
+  return activeRunMode === "adventure"
+    && getCurrentRegionIndex() === 0
+    && (currentAnswerMode !== ANSWER_MODE_STANDARD || runEncounterIndex === 0)
+    && progress.tutorials[currentAnswerMode] !== true;
+}
+
+function openCurrentModeHelp() {
+  if (!started || !currentQuestion) {
+    return;
+  }
+  const shouldResumeInput = acceptingInput;
+  showModeTutorial({
+    mode: currentAnswerMode,
+    guided: false,
+    onContinue: () => {
+      if (shouldResumeInput && currentQuestion && playerHp > 0) {
+        enableQuestionInput();
+      }
+    }
+  });
+}
+
 function renderQuestion() {
   hideAnswerCallout();
   els.zhPrompt.textContent = currentQuestion.zh;
   els.questionType.textContent = currentQuestion.type;
   els.chapterLabel.textContent = currentQuestion.chapter;
   els.tagLabel.textContent = currentQuestion.tags || `Level ${currentQuestion.level}`;
-  els.feedbackLine.textContent = "聽發音，看中文，依序點字母。";
+  els.feedbackLine.textContent = getAnswerModeInstruction();
   els.feedbackLine.className = "feedback-line";
   els.masteryLabel.textContent = getMasteryText(currentQuestion);
+  updateQuestionModeUi();
 
   renderAnswer(false);
   renderLetterBank();
@@ -2694,7 +3191,15 @@ function showQuestionCallout(question) {
   }
   setWordLockVisible(true);
   triggerCanvasQuestionPose();
-  showMonsterCallout(`${question.zh} 的英文是什麼？`, { sfx: "question" });
+  let prompt = `${question.zh} 的英文是什麼？`;
+  if (currentAnswerMode === ANSWER_MODE_ODD) {
+    prompt = `多餘字母是哪一個？只有一個不屬於「${question.zh}」！`;
+  } else if (currentAnswerMode === ANSWER_MODE_SHUFFLE) {
+    prompt = `逐字鎖定「${question.zh}」的英文！`;
+  } else if (currentAnswerMode === ANSWER_MODE_TIMED) {
+    prompt = `限時拼出「${question.zh}」的英文！`;
+  }
+  showMonsterCallout(prompt, { sfx: "question" });
 }
 
 function showAnswerCallout(answer) {
@@ -2715,22 +3220,160 @@ function beginQuestionDialogue(question) {
   clearDialogueTimers();
   const greeting = pendingEncounterGreeting;
   pendingEncounterGreeting = "";
-  const questionDelay = greeting ? 1450 : 0;
+  const stage = getStage();
+  const mixed = stage?.answerMode === ANSWER_MODE_MIXED;
+  const cueDelay = greeting ? 1450 : 0;
+
+  const continueToQuestion = () => {
+    if (currentQuestion !== question || playerHp <= 0) {
+      return;
+    }
+    showQuestionCallout(question);
+    requestSpeechForCurrentQuestion();
+    queueDialogue(() => {
+      if (currentQuestion === question && playerHp > 0) {
+        enableQuestionInput();
+      }
+    }, 780);
+  };
+
   if (greeting) {
     showMonsterCallout(greeting, { sfx: "greeting" });
   }
+
   queueDialogue(() => {
-    if (currentQuestion === question) {
-      showQuestionCallout(question);
-      requestSpeechForCurrentQuestion();
+    if (currentQuestion !== question) {
+      return;
     }
-  }, questionDelay);
-  queueDialogue(() => {
-    if (currentQuestion === question && playerHp > 0) {
-      acceptingInput = true;
-      setBattlePhase("spell");
+
+    dismissAnswerCalloutVisual();
+    if (shouldTeachCurrentMode()) {
+      showModeTutorial({
+        mode: currentAnswerMode,
+        guided: true,
+        onContinue: continueToQuestion
+      });
+      return;
     }
-  }, questionDelay + 780);
+
+    const cueKey = `${runEncounterIndex}:${currentAnswerMode}`;
+    const showBriefCue = (activeRunMode === "tower" || currentAnswerMode !== ANSWER_MODE_STANDARD)
+      && cueKey !== lastBriefModeCueKey;
+    if (showBriefCue) {
+      lastBriefModeCueKey = cueKey;
+      showModeCue({ compact: true, mixed });
+      queueDialogue(continueToQuestion, 520);
+      return;
+    }
+
+    continueToQuestion();
+  }, cueDelay);
+}
+
+function getQuestionTimeLimitMs() {
+  const letterCount = Math.max(1, answerLetters.length);
+  return Math.max(10000, Math.min(22000, 7000 + letterCount * 1050));
+}
+
+function stopQuestionTimer() {
+  if (questionTimerId) {
+    window.clearInterval(questionTimerId);
+    questionTimerId = 0;
+  }
+  questionTimerDeadline = 0;
+  questionTimerDuration = 0;
+  timedWarningStage = 0;
+}
+
+function clearTimedModeFx() {
+  questionTimerRatio = 1;
+  timedCompletionRatio = 1;
+  timedWarningStage = 0;
+  document.body.classList.remove("timed-warning", "timed-critical");
+  els.dungeonFrame?.classList.remove("timed-clear-high", "timed-clear-mid", "timed-clear-low");
+  els.dungeonFrame?.style.setProperty("--timer-angle", "360deg");
+  if (els.timedPressureText) {
+    els.timedPressureText.textContent = "";
+  }
+}
+
+function renderQuestionTimer() {
+  if (!questionTimerDeadline || !questionTimerDuration || currentAnswerMode !== ANSWER_MODE_TIMED) {
+    return;
+  }
+  const remaining = Math.max(0, questionTimerDeadline - performance.now());
+  const ratio = Math.max(0, Math.min(1, remaining / questionTimerDuration));
+  questionTimerRatio = ratio;
+  els.dungeonFrame?.style.setProperty("--timer-angle", `${Math.max(0, ratio * 360)}deg`);
+  document.body.classList.toggle("timed-warning", ratio <= 0.3 && ratio > 0.15);
+  document.body.classList.toggle("timed-critical", ratio <= 0.15);
+  if (ratio <= 0.15 && timedWarningStage < 2) {
+    timedWarningStage = 2;
+    playTone("wrong");
+  } else if (ratio <= 0.3 && timedWarningStage < 1) {
+    timedWarningStage = 1;
+    playTone("spellTick");
+  }
+  if (els.questionTimerText) {
+    els.questionTimerText.textContent = (remaining / 1000).toFixed(1);
+  }
+  if (els.timedPressureText) {
+    els.timedPressureText.textContent = (remaining / 1000).toFixed(1);
+  }
+  if (els.questionTimerFill) {
+    els.questionTimerFill.style.width = `${Math.round(ratio * 100)}%`;
+    els.questionTimerFill.classList.toggle("danger", ratio <= 0.3);
+  }
+  if (remaining <= 0) {
+    stopQuestionTimer();
+    if (acceptingInput && currentQuestion) {
+      failQuestion(null, { timeout: true });
+    }
+  }
+}
+
+function startQuestionTimer() {
+  stopQuestionTimer();
+  if (currentAnswerMode !== ANSWER_MODE_TIMED) {
+    return;
+  }
+  questionTimerDuration = getQuestionTimeLimitMs();
+  questionTimerDeadline = performance.now() + questionTimerDuration;
+  questionTimerRatio = 1;
+  timedWarningStage = 0;
+  document.body.classList.remove("timed-warning", "timed-critical");
+  els.dungeonFrame?.style.setProperty("--timer-angle", "360deg");
+  if (els.timedPressureText) {
+    els.timedPressureText.textContent = (questionTimerDuration / 1000).toFixed(1);
+  }
+  renderQuestionTimer();
+  questionTimerId = window.setInterval(renderQuestionTimer, 100);
+}
+
+function triggerTimedCompletionFx(ratio) {
+  const safeRatio = Math.max(0, Math.min(1, Number(ratio) || 0));
+  const tier = safeRatio >= 0.55 ? "high" : (safeRatio >= 0.25 ? "mid" : "low");
+  els.dungeonFrame?.classList.remove("timed-clear-high", "timed-clear-mid", "timed-clear-low");
+  void els.dungeonFrame?.offsetWidth;
+  els.dungeonFrame?.classList.add(`timed-clear-${tier}`);
+  document.body.classList.remove("timed-warning", "timed-critical");
+  if (tier === "high") {
+    showBanner("高速完成！");
+    playTone("chargeShot");
+  } else if (tier === "mid") {
+    showBanner("能量穩定！");
+    playTone("spellTick");
+  } else {
+    showBanner("極限完成！");
+    playTone("heavyHit");
+  }
+}
+
+function enableQuestionInput() {
+  document.body.classList.remove("question-input-locked");
+  acceptingInput = true;
+  setBattlePhase("spell");
+  startQuestionTimer();
 }
 
 function beginWrongAnswerDialogue(question) {
@@ -2775,8 +3418,7 @@ function beginWrongAnswerDialogue(question) {
   return retryBanterMs + spellEndPadMs;
 }
 
-function hideAnswerCallout() {
-  clearDialogueTimers();
+function dismissAnswerCalloutVisual() {
   clearCalloutSfxTimers();
   if (calloutTimer) {
     window.clearTimeout(calloutTimer);
@@ -2786,13 +3428,32 @@ function hideAnswerCallout() {
   els.answerCallout?.classList.add("hidden");
 }
 
+function hideAnswerCallout() {
+  clearDialogueTimers();
+  dismissAnswerCalloutVisual();
+}
+
 function renderAnswer(revealAnswer) {
   els.answerDisplay.replaceChildren();
+  els.answerDisplay.classList.toggle("defense-display", currentAnswerMode === ANSWER_MODE_ODD && !revealAnswer);
+  if (currentAnswerMode === ANSWER_MODE_ODD && !revealAnswer) {
+    const shield = document.createElement("span");
+    shield.className = "defense-symbol";
+    shield.textContent = "?";
+    const label = document.createElement("strong");
+    label.className = "defense-label";
+    label.textContent = "選出多餘字母";
+    els.answerDisplay.append(shield, label);
+    return;
+  }
+  const visibleLetterCount = currentAnswerMode === ANSWER_MODE_STANDARD && !revealAnswer
+    ? standardDisplayedLetterCount
+    : selectedLetters.length;
   for (const token of answerTokens) {
     const node = document.createElement("span");
     if (token.kind === "letter") {
       node.className = "answer-slot";
-      if (revealAnswer || selectedLetters.length > token.letterIndex) {
+      if (revealAnswer || visibleLetterCount > token.letterIndex) {
         node.textContent = token.value.toUpperCase();
         node.classList.add("filled");
       }
@@ -2804,8 +3465,314 @@ function renderAnswer(revealAnswer) {
   }
 }
 
+function clearStandardLetterFx() {
+  for (const timer of standardFxTimers) {
+    window.clearTimeout(timer);
+  }
+  standardFxTimers = [];
+  els.letterEnergyLayer?.replaceChildren();
+  els.battleWordLock?.classList.remove("standard-lock-hit", "standard-finisher-ready");
+}
+
+function queueStandardFx(callback, delay) {
+  const timer = window.setTimeout(() => {
+    standardFxTimers = standardFxTimers.filter((item) => item !== timer);
+    callback();
+  }, delay);
+  standardFxTimers.push(timer);
+  return timer;
+}
+
+function clearShuffleFx() {
+  for (const timer of shuffleFxTimers) {
+    window.clearTimeout(timer);
+  }
+  shuffleFxTimers = [];
+  els.letterBank?.classList.remove("shuffle-dispersing", "shuffle-materializing", "shuffle-scanning");
+  els.letterBank?.querySelectorAll(".shuffle-target-hit").forEach((node) => node.classList.remove("shuffle-target-hit"));
+  els.letterEnergyLayer?.querySelectorAll(".shuffle-data-fragment").forEach((node) => node.remove());
+  els.battleWordLock?.classList.remove("shuffle-lock-hit");
+}
+
+function queueShuffleFx(callback, delay) {
+  const timer = window.setTimeout(() => {
+    shuffleFxTimers = shuffleFxTimers.filter((item) => item !== timer);
+    callback();
+  }, delay);
+  shuffleFxTimers.push(timer);
+  return timer;
+}
+
+function clearOddFx() {
+  for (const timer of oddFxTimers) {
+    window.clearTimeout(timer);
+  }
+  oddFxTimers = [];
+  els.oddDefenseField?.classList.remove("odd-shatter", "odd-reflect", "odd-locked", "odd-crack");
+  els.oddDefenseField?.querySelectorAll(".odd-defense-shard").forEach((node) => node.remove());
+  els.letterBank?.querySelectorAll(".odd-weakpoint, .odd-rejected").forEach((node) => {
+    node.classList.remove("odd-weakpoint", "odd-rejected");
+  });
+}
+
+function queueOddFx(callback, delay) {
+  const timer = window.setTimeout(() => {
+    oddFxTimers = oddFxTimers.filter((item) => item !== timer);
+    callback();
+  }, delay);
+  oddFxTimers.push(timer);
+  return timer;
+}
+
+function spawnOddDefenseShards() {
+  if (!els.oddDefenseField) {
+    return;
+  }
+  const shards = [
+    [-128, -82, -24],
+    [-62, -126, -12],
+    [72, -122, 16],
+    [132, -68, 28],
+    [-142, 42, -34],
+    [-72, 118, -18],
+    [64, 124, 14],
+    [142, 48, 32]
+  ];
+  shards.forEach(([x, y, rotation], index) => {
+    const shard = document.createElement("span");
+    shard.className = "odd-defense-shard";
+    shard.style.setProperty("--odd-shard-x", `${x}px`);
+    shard.style.setProperty("--odd-shard-y", `${y}px`);
+    shard.style.setProperty("--odd-shard-r", `${rotation}deg`);
+    shard.style.setProperty("--odd-shard-delay", `${index * 12}ms`);
+    els.oddDefenseField.appendChild(shard);
+  });
+}
+
+function triggerOddDefenseResult(button, correct, onComplete) {
+  clearOddFx();
+  acceptingInput = false;
+  button.classList.add(correct ? "odd-weakpoint" : "odd-rejected");
+  els.oddDefenseField?.classList.add(correct ? "odd-locked" : "odd-reflect");
+  playTone(correct ? "spellTick" : "wrong");
+
+  if (correct) {
+    queueOddFx(() => {
+      els.oddDefenseField?.classList.remove("odd-locked");
+      els.oddDefenseField?.classList.add("odd-crack");
+      playTone("spellTick");
+    }, 150);
+    queueOddFx(() => {
+      els.oddDefenseField?.classList.remove("odd-crack");
+      els.oddDefenseField?.classList.add("odd-shatter");
+      spawnOddDefenseShards();
+      playTone("heavyHit");
+    }, 430);
+    queueOddFx(() => {
+      if (typeof onComplete === "function") {
+        onComplete();
+      }
+    }, 820);
+    return;
+  }
+
+  queueOddFx(() => {
+    if (typeof onComplete === "function") {
+      onComplete();
+    }
+  }, 430);
+}
+
+function showShuffleScanPulse() {
+  if (!els.letterBank) {
+    return;
+  }
+  els.letterBank.classList.remove("shuffle-scanning");
+  void els.letterBank.offsetWidth;
+  els.letterBank.classList.add("shuffle-scanning");
+  queueShuffleFx(() => els.letterBank.classList.remove("shuffle-scanning"), 330);
+}
+
+function spawnShuffleDataFragments(buttons) {
+  if (!els.letterEnergyLayer || !els.dungeonFrame) {
+    return;
+  }
+  const frameRect = els.dungeonFrame.getBoundingClientRect();
+  buttons.forEach((button, buttonIndex) => {
+    const rect = button.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2 - frameRect.left;
+    const centerY = rect.top + rect.height / 2 - frameRect.top;
+    for (let fragmentIndex = 0; fragmentIndex < 3; fragmentIndex += 1) {
+      const fragment = document.createElement("span");
+      fragment.className = "shuffle-data-fragment";
+      fragment.textContent = fragmentIndex === 1 ? button.textContent : "";
+      fragment.style.left = `${centerX}px`;
+      fragment.style.top = `${centerY + (fragmentIndex - 1) * 11}px`;
+      fragment.style.width = `${Math.max(28, rect.width * (0.72 - fragmentIndex * 0.08))}px`;
+      els.letterEnergyLayer.appendChild(fragment);
+      const direction = (buttonIndex + fragmentIndex) % 2 === 0 ? -1 : 1;
+      const travelX = direction * (30 + buttonIndex * 7 + fragmentIndex * 12);
+      const travelY = (fragmentIndex - 1) * 34 - 12 - (buttonIndex % 2) * 8;
+      fragment.animate([
+        { transform: "translate(-50%, -50%) scaleX(1)", opacity: 1 },
+        { transform: `translate(calc(-50% + ${travelX * 0.35}px), calc(-50% + ${travelY * 0.25}px)) scaleX(1.45)`, opacity: 0.95, offset: 0.4 },
+        { transform: `translate(calc(-50% + ${travelX}px), calc(-50% + ${travelY}px)) scaleX(0.22)`, opacity: 0 }
+      ], {
+        duration: 250,
+        delay: buttonIndex * 10 + fragmentIndex * 14,
+        easing: "cubic-bezier(0.22, 0.72, 0.18, 1)",
+        fill: "forwards"
+      });
+      queueShuffleFx(() => fragment.remove(), 330 + buttonIndex * 10);
+    }
+  });
+}
+
+function triggerShuffleLetterSequence(button, isFinal, onReady) {
+  clearShuffleFx();
+  const buttons = [...els.letterBank.querySelectorAll(".letter-button")];
+  buttons.forEach((item, index) => {
+    const direction = index % 2 === 0 ? -1 : 1;
+    item.style.setProperty("--shuffle-x", `${direction * (18 + index * 5)}px`);
+    item.style.setProperty("--shuffle-y", `${-10 - (index % 3) * 8}px`);
+    item.style.setProperty("--shuffle-delay", `${index * 14}ms`);
+  });
+  button.classList.add("shuffle-target-hit");
+  els.battleWordLock.classList.remove("shuffle-lock-hit");
+  void els.battleWordLock.offsetWidth;
+  els.battleWordLock.classList.add("shuffle-lock-hit");
+  playTone("tick");
+
+  queueShuffleFx(() => {
+    spawnShuffleDataFragments(buttons);
+    els.letterBank.classList.add("shuffle-dispersing");
+    showShuffleScanPulse();
+    if (typeof onReady === "function") {
+      onReady("hit");
+    }
+  }, 55);
+
+  if (isFinal) {
+    queueShuffleFx(() => {
+      if (typeof onReady === "function") {
+        onReady("complete");
+      }
+    }, 250);
+    return;
+  }
+
+  queueShuffleFx(() => {
+    renderShuffleLetterBank(true);
+  }, 190);
+  queueShuffleFx(() => {
+    els.letterBank.classList.remove("shuffle-materializing");
+    if (typeof onReady === "function") {
+      onReady("ready");
+    }
+  }, 350);
+}
+
+function triggerStandardLetterCapture(button, slotIndex, char, isFinal, onReady) {
+  if (currentAnswerMode !== ANSWER_MODE_STANDARD || !els.letterEnergyLayer || !els.dungeonFrame) {
+    return;
+  }
+  const slot = els.answerDisplay?.querySelectorAll(".answer-slot")[slotIndex];
+  if (!slot) {
+    return;
+  }
+
+  const frameRect = els.dungeonFrame.getBoundingClientRect();
+  const buttonRect = button.getBoundingClientRect();
+  const slotRect = slot.getBoundingClientRect();
+  const start = {
+    x: buttonRect.left + buttonRect.width / 2 - frameRect.left,
+    y: buttonRect.top + buttonRect.height / 2 - frameRect.top
+  };
+  const lock = {
+    x: slotRect.left + slotRect.width / 2 - frameRect.left,
+    y: slotRect.top + slotRect.height / 2 - frameRect.top
+  };
+
+  button.classList.add("letter-launching");
+  playTone("tick");
+
+  queueStandardFx(() => {
+    button.classList.add("used");
+    button.classList.remove("letter-launching");
+    const token = document.createElement("span");
+    token.className = "letter-energy-token";
+    token.textContent = String(char || "").toUpperCase();
+    token.style.left = `${start.x}px`;
+    token.style.top = `${start.y}px`;
+    els.letterEnergyLayer.appendChild(token);
+    token.animate([
+      { transform: "translate(-50%, -50%) scale(1.2)", opacity: 1, offset: 0 },
+      {
+        transform: `translate(calc(-50% + ${(lock.x - start.x) * 0.58}px), calc(-50% + ${lock.y - start.y - 54}px)) scale(1.55)`,
+        opacity: 1,
+        offset: 0.58
+      },
+      {
+        transform: `translate(calc(-50% + ${lock.x - start.x}px), calc(-50% + ${lock.y - start.y}px)) scale(0.72)`,
+        opacity: 1,
+        offset: 0.92
+      },
+      {
+        transform: `translate(calc(-50% + ${lock.x - start.x}px), calc(-50% + ${lock.y - start.y}px)) scale(0.42)`,
+        opacity: 0,
+        offset: 1
+      }
+    ], {
+      duration: 300,
+      easing: "cubic-bezier(0.2, 0.72, 0.18, 1)",
+      fill: "forwards"
+    });
+  }, 60);
+
+  queueStandardFx(() => {
+    els.letterEnergyLayer.querySelector(".letter-energy-token")?.remove();
+    standardDisplayedLetterCount = Math.max(standardDisplayedLetterCount, slotIndex + 1);
+    renderAnswer(false);
+    const filledSlot = els.answerDisplay?.querySelectorAll(".answer-slot")[slotIndex];
+    filledSlot?.classList.add("newly-filled");
+    els.battleWordLock.classList.remove("standard-lock-hit");
+    void els.battleWordLock.offsetWidth;
+    els.battleWordLock.classList.add("standard-lock-hit");
+    playTone("spellTick");
+
+    const impact = document.createElement("span");
+    impact.className = "letter-slot-impact";
+    impact.style.left = `${lock.x}px`;
+    impact.style.top = `${lock.y}px`;
+    els.letterEnergyLayer.appendChild(impact);
+    queueStandardFx(() => impact.remove(), 300);
+  }, 350);
+
+  if (isFinal) {
+    queueStandardFx(() => {
+      els.battleWordLock.classList.add("standard-finisher-ready");
+      playTone("spellTick");
+    }, 420);
+  }
+
+  queueStandardFx(() => {
+    if (typeof onReady === "function") {
+      onReady();
+    }
+  }, isFinal ? 560 : 430);
+}
+
 function renderLetterBank() {
   els.letterBank.replaceChildren();
+  els.letterBank.classList.remove("shuffle-dispersing", "shuffle-materializing");
+  if (currentAnswerMode === ANSWER_MODE_SHUFFLE) {
+    renderShuffleLetterBank();
+    return;
+  }
+  if (currentAnswerMode === ANSWER_MODE_ODD) {
+    renderOddLetterBank();
+    return;
+  }
   const answerPool = answerLetters.map((token, index) => ({
     id: `${token.match}_${index}_${Math.random().toString(16).slice(2)}`,
     char: token.value,
@@ -2834,6 +3801,63 @@ function renderLetterBank() {
     button.addEventListener("click", () => chooseLetter(button));
     els.letterBank.appendChild(button);
   }
+}
+
+function createLetterButton(item) {
+  const button = document.createElement("button");
+  button.className = "letter-button";
+  if (item.distractor) {
+    button.classList.add("distractor");
+  }
+  button.type = "button";
+  button.textContent = item.char.toUpperCase();
+  button.dataset.match = item.match;
+  if (item.oddAnswer) {
+    button.dataset.oddAnswer = "true";
+  }
+  button.addEventListener("click", () => chooseLetter(button));
+  return button;
+}
+
+function getLetterCandidates(excluded = new Set()) {
+  return shuffle(Array.from("etaoinshrdlucmfwypvbgkjqxz").filter((char) => !excluded.has(char)));
+}
+
+function renderShuffleLetterBank(animate = false) {
+  const next = answerLetters[selectedLetters.length];
+  if (!next) {
+    return;
+  }
+  const excluded = new Set([next.match]);
+  const distractors = getLetterCandidates(excluded).slice(0, 4).map((char) => ({
+    char,
+    match: char,
+    distractor: true
+  }));
+  const pool = shuffle([{ char: next.value, match: next.match, distractor: false }, ...distractors]);
+  els.letterBank.classList.remove("compact", "dense");
+  els.letterBank.replaceChildren();
+  pool.forEach((item, index) => {
+    const button = createLetterButton(item);
+    button.style.setProperty("--shuffle-enter-delay", `${index * 18}ms`);
+    els.letterBank.appendChild(button);
+  });
+  if (animate) {
+    els.letterBank.classList.remove("shuffle-dispersing");
+    els.letterBank.classList.add("shuffle-materializing");
+  }
+}
+
+function renderOddLetterBank() {
+  const answerSet = new Set(answerLetters.map((token) => token.match));
+  const answerChoices = shuffle([...answerSet]).slice(0, 5);
+  oddAnswerMatch = getLetterCandidates(answerSet)[0] || "x";
+  const pool = shuffle([
+    ...answerChoices.map((char) => ({ char, match: char, distractor: false })),
+    { char: oddAnswerMatch, match: oddAnswerMatch, distractor: true, oddAnswer: true }
+  ]);
+  els.letterBank.classList.remove("compact", "dense");
+  pool.forEach((item) => els.letterBank.appendChild(createLetterButton(item)));
 }
 
 function getDistractorLetters(question) {
@@ -2912,7 +3936,20 @@ function getRemainingQuestionDamage() {
 }
 
 function chooseLetter(button) {
-  if (!acceptingInput || !currentQuestion || button.classList.contains("used")) {
+  if (!acceptingInput || !currentQuestion || button.classList.contains("used") || button.dataset.consumed === "true") {
+    return;
+  }
+
+  if (currentAnswerMode === ANSWER_MODE_ODD) {
+    if (button.dataset.oddAnswer === "true") {
+      selectedLetters = answerLetters.map((token) => token.match);
+      triggerOddDefenseResult(button, true, () => {
+        renderAnswer(true);
+        completeQuestion();
+      });
+    } else {
+      triggerOddDefenseResult(button, false, () => failQuestion(button));
+    }
     return;
   }
 
@@ -2922,11 +3959,50 @@ function chooseLetter(button) {
   }
 
   if (button.dataset.match === next.match) {
-    button.classList.add("used");
+    const selectedIndex = selectedLetters.length;
+    const isFinalLetter = selectedIndex + 1 === answerLetters.length;
+    button.dataset.consumed = "true";
     selectedLetters.push(button.dataset.match);
-    renderAnswer(false);
 
-    if (selectedLetters.length === answerLetters.length) {
+    if (currentAnswerMode === ANSWER_MODE_STANDARD) {
+      acceptingInput = false;
+      const answeredQuestion = currentQuestion;
+      triggerStandardLetterCapture(button, selectedIndex, next.value, isFinalLetter, () => {
+        if (currentQuestion !== answeredQuestion || playerHp <= 0) {
+          return;
+        }
+        if (isFinalLetter) {
+          completeQuestion();
+        } else {
+          applyLetterHit();
+          acceptingInput = true;
+        }
+      });
+      return;
+    }
+
+    if (currentAnswerMode === ANSWER_MODE_SHUFFLE) {
+      acceptingInput = false;
+      const answeredQuestion = currentQuestion;
+      renderAnswer(false);
+      triggerShuffleLetterSequence(button, isFinalLetter, (phase) => {
+        if (currentQuestion !== answeredQuestion || playerHp <= 0) {
+          return;
+        }
+        if (phase === "hit" && !isFinalLetter) {
+          applyLetterHit();
+        } else if (phase === "complete" && isFinalLetter) {
+          completeQuestion();
+        } else if (phase === "ready" && !isFinalLetter) {
+          acceptingInput = true;
+        }
+      });
+      return;
+    }
+
+    button.classList.add("used");
+    renderAnswer(false);
+    if (isFinalLetter) {
       acceptingInput = false;
       window.setTimeout(completeQuestion, 90);
     } else {
@@ -2937,24 +4013,43 @@ function chooseLetter(button) {
   }
 }
 
-function failQuestion(button) {
+function failQuestion(button, options = {}) {
+  clearStandardLetterFx();
+  clearShuffleFx();
+  clearOddFx();
+  stopQuestionTimer();
+  clearTimedModeFx();
+  hideModeCue();
+  document.body.classList.add("question-input-locked");
   acceptingInput = false;
   setBattlePhase("spell");
-  recordWordResult(currentQuestion, false);
-  runStats.wrong += 1;
-  runStats.retries += 1;
-  rememberWrongQuestion(currentQuestion);
+  const tutorialShield = guidedTutorialQuestion && !guidedTutorialMistakeUsed;
+  guidedTutorialMistakeUsed = guidedTutorialMistakeUsed || tutorialShield;
+  if (!tutorialShield) {
+    recordWordResult(currentQuestion, false);
+    runStats.wrong += 1;
+    runStats.retries += 1;
+    rememberWrongQuestion(currentQuestion);
+  }
   combo = 0;
-  playerHp = Math.max(0, playerHp - WRONG_DAMAGE);
-  button.classList.remove("wrong");
-  void button.offsetWidth;
-  button.classList.add("wrong");
+  if (!tutorialShield) {
+    playerHp = Math.max(0, playerHp - WRONG_DAMAGE);
+  }
+  if (button) {
+    button.classList.remove("wrong");
+    void button.offsetWidth;
+    button.classList.add("wrong");
+  }
   renderAnswer(true);
   renderHud();
   playTone("wrong");
   triggerEnemyCounterAttack();
 
-  els.feedbackLine.textContent = `怪物反擊！正確答案是 ${currentQuestion.en}`;
+  els.feedbackLine.textContent = tutorialShield
+    ? `教學護盾擋住了攻擊！正確答案是 ${currentQuestion.en}`
+    : (options.timeout
+      ? `時間到！正確答案是 ${currentQuestion.en}`
+      : `怪物反擊！正確答案是 ${currentQuestion.en}`);
   els.feedbackLine.className = "feedback-line bad";
   const retryDelay = beginWrongAnswerDialogue(currentQuestion);
 
@@ -2967,6 +4062,13 @@ function failQuestion(button) {
 }
 
 function retryQuestion() {
+  clearStandardLetterFx();
+  clearShuffleFx();
+  clearOddFx();
+  standardDisplayedLetterCount = 0;
+  stopQuestionTimer();
+  clearTimedModeFx();
+  document.body.classList.add("question-input-locked");
   selectedLetters = [];
   hideAnswerCallout();
   acceptingInput = false;
@@ -2981,20 +4083,29 @@ function retryQuestion() {
   requestSpeechForCurrentQuestion();
   window.setTimeout(() => {
     if (currentQuestion && playerHp > 0) {
-      acceptingInput = true;
-      setBattlePhase("spell");
+      enableQuestionInput();
     }
   }, 780);
 }
 
 function completeQuestion() {
+  timedCompletionRatio = currentAnswerMode === ANSWER_MODE_TIMED ? questionTimerRatio : 1;
+  stopQuestionTimer();
+  hideModeCue();
+  clearShuffleFx();
+  clearOddFx();
+  document.body.classList.add("question-input-locked");
   acceptingInput = false;
   hideAnswerCallout();
   setWordLockVisible(false);
   setBattlePhase("attack");
   const answeredQuestion = currentQuestion;
+  clearStandardLetterFx();
+  guidedTutorialQuestion = false;
+  guidedTutorialMistakeUsed = false;
   const masteryBefore = { ...getWordProgress(currentQuestion) };
   recordWordResult(currentQuestion, true);
+  runStats.modeCorrect[currentAnswerMode] = (runStats.modeCorrect[currentAnswerMode] || 0) + 1;
   const masteryReward = getMasteryReward(currentQuestion, masteryBefore, getWordProgress(currentQuestion));
   if (masteryReward) {
     addRunReward("熟練度提升", masteryReward, "mastery");
@@ -3005,6 +4116,9 @@ function completeQuestion() {
   const actualDamage = Math.min(monsterHp, getRemainingQuestionDamage());
   monsterHp = Math.max(0, monsterHp - actualDamage);
   const skill = getComboSkill(monsterHp <= 0);
+  if (currentAnswerMode === ANSWER_MODE_TIMED) {
+    triggerTimedCompletionFx(timedCompletionRatio);
+  }
 
   els.feedbackLine.textContent = getHitFeedback(skill, currentQuestion.en);
   els.feedbackLine.className = "feedback-line good";
@@ -3061,6 +4175,35 @@ function getHitFeedback(skill, answer) {
   return `命中！${answer}`;
 }
 
+function getRankValue(rank) {
+  return ({ S: 4, A: 3, B: 2, C: 1 })[rank] || 0;
+}
+
+function completeTowerFloorProgress() {
+  progress.tower = normalizeTowerProgress(progress.tower);
+  const totalAttempts = runStats.correct + runStats.wrong;
+  const accuracy = totalAttempts ? Math.round((runStats.correct / totalAttempts) * 100) : 0;
+  const grade = getRunGrade(accuracy, runStats.maxCombo, runStats.wrong);
+  const key = String(activeTowerFloor);
+  const previous = progress.tower.floors[key] || { clears: 0, bestRank: "" };
+  const firstClear = previous.clears === 0;
+  const coreReward = firstClear ? 2 : 1;
+  progress.tower.cores += coreReward;
+  progress.tower.floors[key] = {
+    clears: previous.clears + 1,
+    bestRank: getRankValue(grade.rank) > getRankValue(previous.bestRank) ? grade.rank : previous.bestRank || grade.rank,
+    bestAccuracy: Math.max(Number(previous.bestAccuracy) || 0, accuracy),
+    lastAccuracy: accuracy
+  };
+  if (firstClear && activeTowerFloor >= progress.tower.highestUnlocked && activeTowerFloor < TOWER_FLOOR_COUNT) {
+    progress.tower.highestUnlocked = activeTowerFloor + 1;
+  }
+  runStats.towerCores += coreReward;
+  addRunReward("試煉晶核", `+${coreReward}`, "growth");
+  saveProgress();
+  return { grade, accuracy, coreReward, firstClear };
+}
+
 function defeatMonster() {
   acceptingInput = false;
   showMonsterCallout("可惡，我還會再變強的！", { duration: 1500, sfx: "defeat" });
@@ -3073,9 +4216,10 @@ function defeatMonster() {
   const monsterStage = getEncounterMonsterStage(monsterIndex);
   const monsterName = getMonsterDisplayName(monsterIndex, monsterStage);
   const clearedRegion = REGIONS[getCurrentRegionIndex()];
-  const capturedNow = captureMonster(monsterIndex);
-  const unlockStatus = defeatedBoss ? getRegionUnlockStatus(getCurrentRegionIndex()) : null;
-  const unlockedRegionNow = defeatedBoss && unlockNextRegion();
+  const isAdventureRun = activeRunMode === "adventure";
+  const capturedNow = isAdventureRun ? captureMonster(monsterIndex) : false;
+  const unlockStatus = defeatedBoss && isAdventureRun ? getRegionUnlockStatus(getCurrentRegionIndex()) : null;
+  const unlockedRegionNow = defeatedBoss && isAdventureRun && unlockNextRegion();
   const nextRegion = REGIONS[getCurrentRegionIndex()];
   runStats.monsters += 1;
   if (capturedNow) {
@@ -3083,24 +4227,26 @@ function defeatMonster() {
     runStats.capturedMonsters.push(monsterIndex);
     addRunReward("新收服", monsterName, "capture", { monsterIndex });
   }
-  const growth = awardMonsterGrowth(monsterIndex, { capturedNow, defeatedBoss });
-  runStats.monsterExp += growth.expGain;
-  runStats.monsterShards += growth.shardGain;
-  runStats.monsterLevelUps += growth.levelUps;
-  runStats.monsterStarUps += growth.starUps;
-  if (growth.evolved) {
-    runStats.evolved += 1;
-    runStats.evolvedMonsters.push({ monsterIndex, stage: growth.afterStage });
-  }
-  addRunReward("怪物 EXP", `${monsterName} +${growth.expGain} EXP`, "growth", { monsterIndex });
-  if (growth.levelUps > 0) {
-    addRunReward("等級提升", `${monsterName} Lv.${growth.after.level}`, "growth", { monsterIndex });
-  }
-  if (growth.starUps > 0) {
-    addRunReward("升星成功", `${monsterName} ${getMonsterStarText(growth.after)}`, "growth", { monsterIndex });
-  }
-  if (growth.evolved) {
-    addRunReward("進化成功", `${getMonsterDisplayName(monsterIndex, growth.afterStage)} ${getMonsterEvolutionLabel(growth.afterStage)}`, "evolution", { monsterIndex, stage: growth.afterStage });
+  const growth = isAdventureRun ? awardMonsterGrowth(monsterIndex, { capturedNow, defeatedBoss }) : null;
+  if (growth) {
+    runStats.monsterExp += growth.expGain;
+    runStats.monsterShards += growth.shardGain;
+    runStats.monsterLevelUps += growth.levelUps;
+    runStats.monsterStarUps += growth.starUps;
+    if (growth.evolved) {
+      runStats.evolved += 1;
+      runStats.evolvedMonsters.push({ monsterIndex, stage: growth.afterStage });
+    }
+    addRunReward("怪物 EXP", `${monsterName} +${growth.expGain} EXP`, "growth", { monsterIndex });
+    if (growth.levelUps > 0) {
+      addRunReward("等級提升", `${monsterName} Lv.${growth.after.level}`, "growth", { monsterIndex });
+    }
+    if (growth.starUps > 0) {
+      addRunReward("升星成功", `${monsterName} ${getMonsterStarText(growth.after)}`, "growth", { monsterIndex });
+    }
+    if (growth.evolved) {
+      addRunReward("進化成功", `${getMonsterDisplayName(monsterIndex, growth.afterStage)} ${getMonsterEvolutionLabel(growth.afterStage)}`, "evolution", { monsterIndex, stage: growth.afterStage });
+    }
   }
   if (unlockedRegionNow) {
     addRunReward("新地區", nextRegion.name, "region");
@@ -3108,7 +4254,9 @@ function defeatMonster() {
     addRunReward("解鎖條件", unlockStatus.text, "region");
   }
   updateProgressLabels();
-  showBanner(unlockedRegionNow ? "新地區解鎖！" : (defeatedBoss ? "Boss 擊破！" : (capturedNow ? "收服成功！" : "再次擊敗！")));
+  showBanner(activeRunMode === "tower"
+    ? (defeatedBoss ? "樓層守護者擊破！" : "試煉房突破！")
+    : (unlockedRegionNow ? "新地區解鎖！" : (defeatedBoss ? "Boss 擊破！" : (capturedNow ? "收服成功！" : "再次擊敗！"))));
   if (unlockedRegionNow) {
     showReward("新地區解鎖！", nextRegion.name, "region");
   } else if (defeatedBoss && unlockStatus && !unlockStatus.ready && getCurrentRegionIndex() < REGIONS.length - 1) {
@@ -3118,12 +4266,14 @@ function defeatMonster() {
     if (!defeatedBoss) {
       window.setTimeout(() => showCaptureCard(monsterIndex), 260);
     }
-  } else if (growth.evolved) {
+  } else if (growth?.evolved) {
     showReward("進化成功！", `${getMonsterDisplayName(monsterIndex, growth.afterStage)} ${getMonsterEvolutionLabel(growth.afterStage)}`, "evolution");
-  } else if (growth.levelUps > 0 || growth.starUps > 0) {
+  } else if (growth && (growth.levelUps > 0 || growth.starUps > 0)) {
     showReward("養成成功！", `${monsterName} Lv.${growth.after.level} ${getMonsterStarText(growth.after)}`, "growth");
-  } else {
+  } else if (growth) {
     showReward(`+${growth.expGain} EXP`, monsterName, "growth");
+  } else if (activeRunMode === "tower") {
+    showReward("試煉突破", ANSWER_MODE_LABELS[currentAnswerMode], "growth");
   }
   questionIndex += 1;
 
@@ -3139,6 +4289,12 @@ function defeatMonster() {
   window.setTimeout(() => {
     if (defeatedBoss) {
       awardRunCompletionMaterials();
+      if (activeRunMode === "tower") {
+        completeTowerFloorProgress();
+        showBanner(`第 ${activeTowerFloor} 層突破！`);
+        window.setTimeout(showRunSummary, 1250);
+        return;
+      }
       showClearCinematic({ clearedRegion, nextRegion, unlockedRegionNow, unlockStatus });
       window.setTimeout(() => {
         hideClearCinematic();
@@ -3157,6 +4313,7 @@ function skipQuestion() {
   if (!acceptingInput || !currentQuestion) {
     return;
   }
+  stopQuestionTimer();
   acceptingInput = false;
   hideAnswerCallout();
   setBattlePhase("spell");
@@ -3183,14 +4340,22 @@ function skipQuestion() {
 }
 
 function gameOver() {
+  clearStandardLetterFx();
+  clearShuffleFx();
+  clearOddFx();
+  stopQuestionTimer();
+  clearTimedModeFx();
+  hideModeCue();
+  hideModeTutorial();
   acceptingInput = false;
   hideAnswerCallout();
   setBattlePhase("spell");
   startMusic("title");
   showBanner("挑戰失敗");
-  els.startTitle.textContent = "再挑戰一次";
+  const towerRun = activeRunMode === "tower";
+  els.startTitle.textContent = towerRun ? `第 ${activeTowerFloor} 層挑戰失敗` : "再挑戰一次";
   els.loadSummary.textContent = `剛剛的答案是 ${currentQuestion.en}。再試一次，怪獸等著你！`;
-  els.startButton.textContent = "重新開始";
+  els.startButton.textContent = towerRun ? "重新挑戰試煉" : "重新開始";
   els.startButton.disabled = false;
   els.startOverlay.classList.remove("hidden");
 }
@@ -3203,27 +4368,44 @@ function showRunSummary() {
   const accuracy = totalAttempts ? Math.round((runStats.correct / totalAttempts) * 100) : 0;
   const currentRegion = REGIONS[getCurrentRegionIndex()];
   const grade = getRunGrade(accuracy, runStats.maxCombo, runStats.wrong);
-  els.runSummaryTitle.textContent = "遠征完成！";
-  els.runSummaryText.textContent = `擊敗 ${runStats.monsters} 隻怪物，答對率 ${accuracy}%。下一站：${currentRegion.name}`;
+  const towerRun = activeRunMode === "tower";
+  els.runSummaryTitle.textContent = towerRun ? `第 ${activeTowerFloor} 層突破！` : "遠征完成！";
+  els.runSummaryText.textContent = towerRun
+    ? `完成六間試煉房，答對率 ${accuracy}%。各種答題方式都留下了熟練紀錄。`
+    : `擊敗 ${runStats.monsters} 隻怪物，答對率 ${accuracy}%。下一站：${currentRegion.name}`;
   els.summaryMedal.textContent = grade.rank;
   els.summaryRankTitle.textContent = grade.title;
   els.summaryRankDetail.textContent = grade.detail;
-  els.nextRunButton.textContent = `挑戰 ${currentRegion.name}`;
-  els.runSummaryStats.replaceChildren(
+  els.nextRunButton.textContent = towerRun ? `再戰第 ${activeTowerFloor} 層` : `挑戰 ${currentRegion.name}`;
+  const summaryItems = [
     createSummaryItem("答對", runStats.correct),
     createSummaryItem("重試", runStats.retries),
-    createSummaryItem("跳過", runStats.skipped),
-    createSummaryItem("最高連擊", runStats.maxCombo),
-    createSummaryItem("新收服", runStats.captured),
-    createSummaryItem("經驗糖果", `+${runStats.materials.candy}`),
-    createSummaryItem("進化能量", `+${runStats.materials.energy}`),
-    createSummaryItem("怪物碎片", `+${runStats.materials.shards}`),
-    createSummaryItem("怪物EXP", `+${runStats.monsterExp}`),
-    createSummaryItem("碎片", `+${runStats.monsterShards}`),
-    createSummaryItem("進化", runStats.evolved),
-    createSummaryItem("圖鑑", `${getCapturedCount()} / ${monsterNames.length}`),
-    createSummaryItem("地區", currentRegion.name)
-  );
+    createSummaryItem("最高連擊", runStats.maxCombo)
+  ];
+  if (towerRun) {
+    summaryItems.push(
+      createSummaryItem("標準拼字", runStats.modeCorrect[ANSWER_MODE_STANDARD] || 0),
+      createSummaryItem("動態鎖定", runStats.modeCorrect[ANSWER_MODE_SHUFFLE] || 0),
+      createSummaryItem("辨識防禦", runStats.modeCorrect[ANSWER_MODE_ODD] || 0),
+      createSummaryItem("限時拼字", runStats.modeCorrect[ANSWER_MODE_TIMED] || 0),
+      createSummaryItem("試煉晶核", `+${runStats.towerCores}`),
+      createSummaryItem("累積晶核", normalizeTowerProgress(progress.tower).cores)
+    );
+  } else {
+    summaryItems.push(
+      createSummaryItem("跳過", runStats.skipped),
+      createSummaryItem("新收服", runStats.captured),
+      createSummaryItem("經驗糖果", `+${runStats.materials.candy}`),
+      createSummaryItem("進化能量", `+${runStats.materials.energy}`),
+      createSummaryItem("怪物碎片", `+${runStats.materials.shards}`),
+      createSummaryItem("怪物EXP", `+${runStats.monsterExp}`),
+      createSummaryItem("碎片", `+${runStats.monsterShards}`),
+      createSummaryItem("進化", runStats.evolved),
+      createSummaryItem("圖鑑", `${getCapturedCount()} / ${monsterNames.length}`),
+      createSummaryItem("地區", currentRegion.name)
+    );
+  }
+  els.runSummaryStats.replaceChildren(...summaryItems);
   renderCaptureShowcase();
   renderRewardHighlights();
   renderWrongReview();
@@ -3505,7 +4687,9 @@ function renderHud() {
   }
   const stage = getStage();
   const act = getRunActInfo();
-  els.stageLabel.textContent = `${act.name} ${act.localIndex + 1}/${ENCOUNTERS_PER_ACT}`;
+  els.stageLabel.textContent = activeRunMode === "tower"
+    ? `第 ${activeTowerFloor} 層 ${runEncounterIndex + 1}/${activeEncounterCount}`
+    : `${act.name} ${act.localIndex + 1}/${ENCOUNTERS_PER_ACT}`;
   els.comboLabel.textContent = String(combo);
   els.questionProgress.textContent = `${(questionIndex % stage.questions.length) + 1} / ${stage.questions.length}`;
   els.hpFill.style.width = `${Math.max(0, (monsterHp / monsterMaxHp) * 100)}%`;
@@ -3520,7 +4704,7 @@ function renderStageTrack() {
   for (let index = 0; index < activeEncounterCount; index += 1) {
     const node = document.createElement("span");
     node.className = "stage-node";
-    if (index % ENCOUNTERS_PER_ACT === 0) {
+    if ((activeRunMode === "tower" && index === 0) || (activeRunMode !== "tower" && index % ENCOUNTERS_PER_ACT === 0)) {
       node.classList.add("act-start");
     }
     if (index === activeEncounterCount - 1) {
@@ -3995,6 +5179,10 @@ function playTone(kind) {
     heavyHit: [110, 0.18, 0.24],
     enemyCharge: [190, 0.16, 0.11],
     enemyHit: [95, 0.18, 0.2],
+    modeStandard: [620, 0.12, 0.1],
+    modeShuffle: [820, 0.14, 0.11],
+    modeOdd: [240, 0.18, 0.14],
+    modeTimed: [720, 0.16, 0.13],
     victory: [300, 0.22, 0.13],
     areaClear: [392, 0.26, 0.14],
     regionClear: [523, 0.3, 0.16]
@@ -4015,13 +5203,22 @@ function playTone(kind) {
     });
   } else {
     const osc = audioContext.createOscillator();
-    osc.type = kind === "wrong" || kind === "heavyHit" || kind === "enemyHit" ? "sawtooth" : "square";
+    osc.type = kind === "wrong" || kind === "heavyHit" || kind === "enemyHit" || kind === "modeOdd" ? "sawtooth" : "square";
     osc.frequency.setValueAtTime(frequency, now);
     if (kind === "shot") {
       osc.frequency.exponentialRampToValueAtTime(1180, now + duration);
     }
     if (kind === "chargeShot") {
       osc.frequency.exponentialRampToValueAtTime(940, now + duration);
+    }
+    if (kind === "modeShuffle") {
+      osc.frequency.exponentialRampToValueAtTime(1260, now + duration);
+    }
+    if (kind === "modeTimed") {
+      osc.frequency.exponentialRampToValueAtTime(940, now + duration);
+    }
+    if (kind === "modeOdd") {
+      osc.frequency.exponentialRampToValueAtTime(150, now + duration);
     }
     if (kind === "hit" || kind === "heavyHit") {
       osc.frequency.exponentialRampToValueAtTime(90, now + duration);
@@ -5209,6 +6406,15 @@ function drawRocks(width, height, t) {
 
 function returnHome() {
   encounterFlowId += 1;
+  stopQuestionTimer();
+  hideModeCue();
+  hideModeTutorial();
+  clearStandardLetterFx();
+  clearShuffleFx();
+  clearOddFx();
+  els.modeHelpButton?.classList.add("hidden");
+  clearTimedModeFx();
+  document.body.classList.remove("question-input-locked");
   acceptingInput = false;
   hideAnswerCallout();
   started = false;
@@ -5224,6 +6430,7 @@ function returnHome() {
   closeTraining();
   closeDex();
   closeRegionMap();
+  closeTower();
   els.runSummaryOverlay?.classList.add("hidden");
   hideClearCinematic();
   els.startTitle.textContent = "單字怪獸遠征";
@@ -5233,6 +6440,7 @@ function returnHome() {
   updateHomeRegionSummary();
   startMusic("title");
   els.startOverlay.classList.remove("hidden");
+  activeRunMode = "adventure";
 }
 
 function openAdventureMap() {
@@ -5262,6 +6470,10 @@ els.startButton.addEventListener("click", () => {
   initAudio();
   startMusic("title");
   window.spellQuestEnterFullscreen?.();
+  if (activeRunMode === "tower" && playerHp <= 0) {
+    startTowerFloor(activeTowerFloor);
+    return;
+  }
   openAdventureMap();
 });
 els.regionMapCloseButton.addEventListener("click", closeRegionMap);
@@ -5275,6 +6487,15 @@ els.regionMapStartButton.addEventListener("click", () => {
 });
 els.trainingButton.addEventListener("click", openTraining);
 els.homeDexButton.addEventListener("click", openDex);
+els.towerButton?.addEventListener("click", () => {
+  initAudio();
+  startMusic("title");
+  window.spellQuestEnterFullscreen?.();
+  openTower();
+});
+els.towerCloseButton?.addEventListener("click", closeTower);
+els.towerBackButton?.addEventListener("click", closeTower);
+els.towerStartButton?.addEventListener("click", () => startTowerFloor(activeTowerFloor));
 els.monsterTestButton.addEventListener("click", startMonsterBattleTest);
 els.scoutToggleButton.addEventListener("click", toggleScout);
 els.scoutStartButton.addEventListener("click", handleScoutPrimaryAction);
@@ -5301,11 +6522,17 @@ els.reloadButton.addEventListener("click", loadQuestions);
 els.hudMusicButton.addEventListener("click", toggleMusic);
 els.homeButton.addEventListener("click", returnHome);
 els.dexButton.addEventListener("click", openDex);
+els.modeHelpButton?.addEventListener("click", openCurrentModeHelp);
+els.modeTutorialStartButton?.addEventListener("click", finishModeTutorial);
 els.dexCloseButton.addEventListener("click", closeDex);
 els.nextRunButton.addEventListener("click", () => {
   initAudio();
   startMusic();
-  startNormalRun(true);
+  if (activeRunMode === "tower") {
+    startTowerFloor(activeTowerFloor);
+  } else {
+    startNormalRun(true);
+  }
 });
 els.retryWrongButton.addEventListener("click", startWrongReviewRun);
 els.summaryDexButton.addEventListener("click", () => {
@@ -5329,6 +6556,11 @@ els.regionMapOverlay.addEventListener("click", (event) => {
     closeRegionMap();
   }
 });
+els.towerOverlay?.addEventListener("click", (event) => {
+  if (event.target === els.towerOverlay) {
+    closeTower();
+  }
+});
 els.allReviewButton.addEventListener("click", () => {
   startPracticeRun(questions, "題庫複習", ENCOUNTERS_PER_RUN);
 });
@@ -5348,6 +6580,8 @@ window.addEventListener("keydown", (event) => {
   }
   if (els.scoutOverlay && !els.scoutOverlay.classList.contains("hidden")) {
     continueFromScout();
+  } else if (els.towerOverlay && !els.towerOverlay.classList.contains("hidden")) {
+    closeTower();
   } else if (!els.trainingOverlay.classList.contains("hidden")) {
     closeTraining();
   } else if (!els.regionMapOverlay.classList.contains("hidden")) {

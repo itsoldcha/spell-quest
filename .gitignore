@@ -28,3 +28,9 @@ screenshots/
 playtest-output/
 *.webm
 *.mp4
+
+# Local visual experiments not used by the shipped runtime
+assets/fx/odd-shield-v*/
+art-source/layers/odd-shield-v*/
+docs/odd-shield-asset-standard-v*.md
+tools/build-odd-shield*-pack.py

@@ -386,6 +386,7 @@ const els = {
   letterBank: document.getElementById("letterBank"),
   feedbackLine: document.getElementById("feedbackLine"),
   startOverlay: document.getElementById("startOverlay"),
+  titleStartButton: document.getElementById("titleStartButton"),
   startButton: document.getElementById("startButton"),
   musicButton: document.getElementById("musicButton"),
   scoutToggleButton: document.getElementById("scoutToggleButton"),
@@ -439,6 +440,7 @@ const els = {
 };
 
 const ctx = els.canvas.getContext("2d");
+document.body.classList.add("home-screen-active");
 if (ctx) {
   els.dungeonFrame.classList.add("canvas-renderer");
 }
@@ -2317,6 +2319,7 @@ function startTowerFloor(floor = 1) {
   startMusic(getRegionMusicTrackId(Math.min(REGIONS.length - 1, Math.floor((safeFloor - 1) / 2))));
   closeTower();
   els.startOverlay.classList.add("hidden");
+  document.body.classList.remove("home-screen-active");
   resetRun(true);
   runStats.towerFloor = safeFloor;
   showBanner(`第 ${safeFloor} 層試煉開始！`);
@@ -2385,6 +2388,7 @@ function startPracticeRun(items, label, encounterCount = REVIEW_ENCOUNTERS_PER_R
   startMusic();
   closeTraining();
   els.startOverlay.classList.add("hidden");
+  document.body.classList.remove("home-screen-active");
   resetRun(true);
   showBanner(label);
 }
@@ -2609,15 +2613,23 @@ function startMonsterBattleTest() {
   started = true;
   initAudio();
   startMusic();
+  pendingRegionIntro = false;
+  hideRegionIntro();
+  hideScoutOverlay();
+  hideModeTutorial();
+  hideModeCue();
   closeTraining();
   closeDex();
+  closeRegionMap();
+  closeTower();
   els.runSummaryOverlay?.classList.add("hidden");
   els.startOverlay.classList.add("hidden");
+  document.body.classList.remove("home-screen-active", "mode-tutorial-active");
   document.body.classList.add("monster-test-mode");
-  els.monsterTestPanel?.classList.remove("hidden");
   populateMonsterTestSelect();
   resetRun(true);
   setMonsterTestStage("baby");
+  els.monsterTestPanel?.classList.remove("hidden");
 }
 
 function exitMonsterBattleTest() {
@@ -4357,6 +4369,7 @@ function gameOver() {
   els.loadSummary.textContent = `剛剛的答案是 ${currentQuestion.en}。再試一次，怪獸等著你！`;
   els.startButton.textContent = towerRun ? "重新挑戰試煉" : "重新開始";
   els.startButton.disabled = false;
+  setStartScreen("menu");
   els.startOverlay.classList.remove("hidden");
 }
 
@@ -6434,13 +6447,34 @@ function returnHome() {
   els.runSummaryOverlay?.classList.add("hidden");
   hideClearCinematic();
   els.startTitle.textContent = "單字怪獸遠征";
-  els.startButton.textContent = "開始冒險";
+  els.startButton.textContent = "開始遠征";
   els.startButton.disabled = questions.length === 0;
   updateRegionPanel();
   updateHomeRegionSummary();
   startMusic("title");
+  setStartScreen("title");
   els.startOverlay.classList.remove("hidden");
   activeRunMode = "adventure";
+}
+
+function setStartScreen(screen = "menu") {
+  if (!els.startOverlay) {
+    return;
+  }
+  els.startOverlay.dataset.screen = screen;
+  document.body.classList.add("home-screen-active");
+}
+
+function enterMainMenu() {
+  initAudio();
+  startMusic("title");
+  battleTestMode = false;
+  document.body.classList.remove("monster-test-mode");
+  els.monsterTestPanel?.classList.add("hidden");
+  updateRegionPanel();
+  updateHomeRegionSummary();
+  setStartScreen("menu");
+  els.startOverlay?.classList.remove("hidden");
 }
 
 function openAdventureMap() {
@@ -6461,8 +6495,9 @@ function startGame() {
   closeTraining();
   closeRegionMap();
   els.startOverlay.classList.add("hidden");
+  document.body.classList.remove("home-screen-active");
   els.startTitle.textContent = "單字怪獸遠征";
-  els.startButton.textContent = "開始冒險";
+  els.startButton.textContent = "開始遠征";
   startNormalRun(true);
 }
 
@@ -6475,6 +6510,19 @@ els.startButton.addEventListener("click", () => {
     return;
   }
   openAdventureMap();
+});
+els.titleStartButton?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  enterMainMenu();
+});
+els.startOverlay?.addEventListener("click", (event) => {
+  if (els.startOverlay?.dataset.screen !== "title") {
+    return;
+  }
+  if (event.target.closest(".home-panel")) {
+    return;
+  }
+  enterMainMenu();
 });
 els.regionMapCloseButton.addEventListener("click", closeRegionMap);
 els.regionMapBackButton.addEventListener("click", closeRegionMap);
@@ -6496,7 +6544,10 @@ els.towerButton?.addEventListener("click", () => {
 els.towerCloseButton?.addEventListener("click", closeTower);
 els.towerBackButton?.addEventListener("click", closeTower);
 els.towerStartButton?.addEventListener("click", () => startTowerFloor(activeTowerFloor));
-els.monsterTestButton.addEventListener("click", startMonsterBattleTest);
+els.monsterTestButton.addEventListener("click", (event) => {
+  event.stopPropagation();
+  startMonsterBattleTest();
+});
 els.scoutToggleButton.addEventListener("click", toggleScout);
 els.scoutStartButton.addEventListener("click", handleScoutPrimaryAction);
 els.scoutSkipButton.addEventListener("click", continueFromScout);

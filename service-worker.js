@@ -1,4 +1,4 @@
-const CACHE_VERSION = "spell-quest-v7";
+const CACHE_VERSION = "spell-quest-v10";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const MEDIA_CACHE = `${CACHE_VERSION}-media`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
@@ -16,6 +16,7 @@ const CORE_ASSETS = [
   "./assets/icons/icon-512.png",
   "./assets/icons/icon-maskable-512.png",
   "./assets/icons/apple-touch-icon.png",
+  "./assets/ui/home-key-art.png",
   "./assets/layers/bg-clean.png",
   "./assets/layers/regions/bg-region-grassland.png",
   "./assets/layers/cannon-left.png",

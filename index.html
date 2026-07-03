@@ -381,42 +381,66 @@
         </div>
       </section>
 
-      <section class="start-overlay" id="startOverlay" aria-label="Start game">
+      <section class="start-overlay" id="startOverlay" data-screen="title" aria-label="Start game">
+        <div class="title-screen" aria-label="Title screen">
+          <div class="title-logo">
+            <span>Spell Quest</span>
+            <strong>單字怪獸遠征</strong>
+          </div>
+          <button class="title-start-button" id="titleStartButton" type="button">點擊畫面開始</button>
+          <div class="title-footer">
+            <span>遠征</span>
+            <span>試煉塔</span>
+            <span>怪物圖鑑</span>
+          </div>
+        </div>
+
         <div class="start-panel home-panel">
-          <p class="eyebrow">Spell Quest</p>
-          <h2 id="startTitle">單字怪獸遠征</h2>
-          <p id="loadSummary">正在準備題庫...</p>
-          <div class="region-card" id="regionCard">
-            <div class="region-card-visual" id="regionCardVisual" aria-hidden="true"></div>
-            <div class="region-card-body">
-              <span class="region-card-label">下一站</span>
-              <div class="region-info">
-                <strong id="regionName">沙漠入口</strong>
-                <span id="regionMeta">L01-L05 · 0 / 5</span>
+          <div class="home-key-art" aria-hidden="true"></div>
+
+          <div class="home-command-card">
+            <p class="eyebrow">Spell Quest</p>
+            <h2 id="startTitle">單字怪獸遠征</h2>
+            <p id="loadSummary">正在準備題庫...</p>
+
+            <div class="home-mission-row">
+              <div class="region-card" id="regionCard">
+                <div class="region-card-visual" id="regionCardVisual" aria-hidden="true"></div>
+                <div class="region-card-body">
+                  <span class="region-card-label">下一站</span>
+                  <div class="region-info">
+                    <strong id="regionName">沙漠入口</strong>
+                    <span id="regionMeta">L01-L05 · 0 / 5</span>
+                  </div>
+                  <div class="region-progress" id="regionProgress" aria-label="地區進度"></div>
+                </div>
               </div>
-              <div class="region-progress" id="regionProgress" aria-label="地區進度"></div>
+
+              <div class="menu-tips">
+                <span>10 層試煉塔</span>
+                <span>3 段進化</span>
+                <span>錯題重練</span>
+              </div>
             </div>
-          </div>
-          <div class="home-actions">
-            <button class="primary-button large" id="startButton" type="button" disabled>開始冒險</button>
-            <button class="tower-button large" id="towerButton" type="button" disabled>熟練試煉塔</button>
-            <button class="secondary-button large" id="trainingButton" type="button">學習手冊</button>
-            <button class="secondary-button large" id="homeDexButton" type="button">怪物圖鑑</button>
-            <button class="secondary-button large" id="scoutToggleButton" type="button">偵查 ON</button>
-            <button class="secondary-button large" id="musicButton" type="button">音樂 ON</button>
-          </div>
-          <div class="pwa-actions" id="pwaActions" hidden>
-            <button class="system-button" id="installAppButton" type="button" hidden>安裝遊戲</button>
-            <button class="system-button" id="fullscreenButton" type="button" hidden>進入全螢幕</button>
-            <span class="pwa-status" id="pwaStatus" aria-live="polite"></span>
-          </div>
-          <div class="home-dev-actions">
-            <button class="secondary-button test-button" id="monsterTestButton" type="button">怪物戰鬥測試</button>
-          </div>
-          <div class="menu-tips">
-            <span>15 場遠征</span>
-            <span>3 段進化</span>
-            <span>錯題重練</span>
+
+            <div class="home-actions">
+              <button class="primary-button large" id="startButton" type="button" disabled>開始遠征</button>
+              <button class="tower-button large" id="towerButton" type="button" disabled>試煉塔挑戰</button>
+              <button class="secondary-button large" id="trainingButton" type="button">學習手冊</button>
+              <button class="secondary-button large" id="homeDexButton" type="button">怪物圖鑑</button>
+              <button class="secondary-button large" id="scoutToggleButton" type="button">偵查 ON</button>
+              <button class="secondary-button large" id="musicButton" type="button">音樂 ON</button>
+            </div>
+
+            <div class="pwa-actions" id="pwaActions" hidden>
+              <button class="system-button" id="installAppButton" type="button" hidden>安裝遊戲</button>
+              <button class="system-button" id="fullscreenButton" type="button" hidden>進入全螢幕</button>
+              <span class="pwa-status" id="pwaStatus" aria-live="polite"></span>
+            </div>
+
+            <div class="home-dev-actions">
+              <button class="secondary-button test-button" id="monsterTestButton" type="button">怪物展示測試</button>
+            </div>
           </div>
         </div>
       </section>

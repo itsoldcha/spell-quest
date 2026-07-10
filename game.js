@@ -10,6 +10,13 @@ const RUN_ACTS = [
   { name: "成長體區", stage: "rookie", rewardScale: 1.35 },
   { name: "完全體區", stage: "ultimate", rewardScale: 1.75 }
 ];
+const ADVENTURE_ACT_COUNT = RUN_ACTS.length;
+const MONSTER_RESEARCH_TARGET = 3;
+const ACT_PRESENTATION = [
+  { kicker: "EXPEDITION ACT I", title: "探索前線", detail: "先用熟悉單字校準炮台，再掃描新的訊號。" },
+  { kicker: "EXPEDITION ACT II", title: "成長航道", detail: "怪物開始使出特性，保持專注、找出規律。" },
+  { kicker: "EXPEDITION ACT III", title: "完全體領域", detail: "最後的航道已開啟，準備迎接區域 Boss。" }
+];
 const ENCOUNTERS_PER_RUN = ENCOUNTERS_PER_ACT * RUN_ACTS.length;
 const NORMAL_ENCOUNTERS_PER_RUN = ENCOUNTERS_PER_RUN - 1;
 const REVIEW_ENCOUNTERS_PER_RUN = 3;
@@ -26,6 +33,11 @@ const ANSWER_MODE_SHUFFLE = "shuffle";
 const ANSWER_MODE_ODD = "odd";
 const ANSWER_MODE_TIMED = "timed";
 const ANSWER_MODE_MIXED = "mixed";
+const ADVENTURE_MODE_SCHEDULE = [
+  [ANSWER_MODE_STANDARD, ANSWER_MODE_STANDARD, ANSWER_MODE_SHUFFLE, ANSWER_MODE_STANDARD, ANSWER_MODE_SHUFFLE],
+  [ANSWER_MODE_STANDARD, ANSWER_MODE_SHUFFLE, ANSWER_MODE_ODD, ANSWER_MODE_SHUFFLE, ANSWER_MODE_ODD],
+  [ANSWER_MODE_SHUFFLE, ANSWER_MODE_ODD, ANSWER_MODE_TIMED, ANSWER_MODE_MIXED, ANSWER_MODE_MIXED]
+];
 const ANSWER_MODE_LABELS = {
   [ANSWER_MODE_STANDARD]: "標準拼字",
   [ANSWER_MODE_SHUFFLE]: "動態鎖定",
@@ -321,6 +333,16 @@ const els = {
   clearRegion: document.getElementById("clearRegion"),
   clearDetail: document.getElementById("clearDetail"),
   clearProgress: document.getElementById("clearProgress"),
+  actCampOverlay: document.getElementById("actCampOverlay"),
+  actCampArt: document.getElementById("actCampArt"),
+  actCampKicker: document.getElementById("actCampKicker"),
+  actCampTitle: document.getElementById("actCampTitle"),
+  actCampDetail: document.getElementById("actCampDetail"),
+  actCampRoute: document.getElementById("actCampRoute"),
+  actCampRewards: document.getElementById("actCampRewards"),
+  actCampContinueButton: document.getElementById("actCampContinueButton"),
+  actCampReviewButton: document.getElementById("actCampReviewButton"),
+  actCampHomeButton: document.getElementById("actCampHomeButton"),
   hpFill: document.getElementById("hpFill"),
   playerHpFill: document.getElementById("playerHpFill"),
   monsterName: document.getElementById("monsterName"),
@@ -382,6 +404,7 @@ const els = {
   retryWrongButton: document.getElementById("retryWrongButton"),
   summaryDexButton: document.getElementById("summaryDexButton"),
   summaryHomeButton: document.getElementById("summaryHomeButton"),
+  playPanel: document.querySelector(".play-panel"),
   answerDisplay: document.getElementById("answerDisplay"),
   letterBank: document.getElementById("letterBank"),
   feedbackLine: document.getElementById("feedbackLine"),
@@ -396,6 +419,7 @@ const els = {
   regionMapStartButton: document.getElementById("regionMapStartButton"),
   regionMapGrid: document.getElementById("regionMapGrid"),
   regionMapSummary: document.getElementById("regionMapSummary"),
+  regionMapActPicker: document.getElementById("regionMapActPicker"),
   regionCard: document.getElementById("regionCard"),
   regionCardVisual: document.getElementById("regionCardVisual"),
   regionName: document.getElementById("regionName"),
@@ -870,6 +894,8 @@ let timedWarningStage = 0;
 let timedCompletionRatio = 1;
 let modeCueTimer = 0;
 let activeTowerFloor = 1;
+let activeAdventureAct = 0;
+let actCampContext = null;
 let modeTutorialContinue = null;
 let modeTutorialMode = ANSWER_MODE_STANDARD;
 let modeTutorialGuided = false;
@@ -951,14 +977,17 @@ function loadProgress() {
       return createEmptyProgress();
     }
     const parsed = JSON.parse(raw);
+    const unlockedRegion = clampNumber(parsed.unlockedRegion, 0, REGIONS.length - 1, 0);
     return {
       captured: Array.isArray(parsed.captured) ? parsed.captured : [],
       monsters: parsed.monsters && typeof parsed.monsters === "object" ? parsed.monsters : {},
+      monsterResearch: normalizeMonsterResearch(parsed.monsterResearch, parsed.captured),
       inventory: normalizeInventory(parsed.inventory),
       words: parsed.words && typeof parsed.words === "object" ? parsed.words : {},
       recentWords: Array.isArray(parsed.recentWords) ? parsed.recentWords.slice(-RECENT_WORD_LIMIT) : [],
-      unlockedRegion: clampNumber(parsed.unlockedRegion, 0, REGIONS.length - 1, 0),
-      currentRegion: clampNumber(parsed.currentRegion, 0, REGIONS.length - 1, clampNumber(parsed.unlockedRegion, 0, REGIONS.length - 1, 0)),
+      unlockedRegion,
+      currentRegion: clampNumber(parsed.currentRegion, 0, REGIONS.length - 1, unlockedRegion),
+      campaign: normalizeCampaignProgress(parsed.campaign, unlockedRegion),
       scoutEnabled: parsed.scoutEnabled !== false,
       tower: normalizeTowerProgress(parsed.tower),
       tutorials: normalizeTutorialProgress(parsed.tutorials)
@@ -973,11 +1002,13 @@ function createEmptyProgress() {
   return {
     captured: [],
     monsters: {},
+    monsterResearch: {},
     inventory: normalizeInventory(),
     words: {},
     recentWords: [],
     unlockedRegion: 0,
     currentRegion: 0,
+    campaign: normalizeCampaignProgress(),
     scoutEnabled: true,
     tower: normalizeTowerProgress(),
     tutorials: normalizeTutorialProgress()
@@ -1019,6 +1050,58 @@ function normalizeInventory(raw = {}) {
   };
 }
 
+function normalizeMonsterResearch(raw = {}, captured = []) {
+  const research = {};
+  if (raw && typeof raw === "object") {
+    for (const [key, value] of Object.entries(raw)) {
+      const index = Number(key);
+      if (!Number.isInteger(index) || index < 0 || index >= monsterNames.length) {
+        continue;
+      }
+      research[String(index)] = {
+        discovered: value?.discovered === true || Number(value?.signals) > 0,
+        signals: clampNumber(value?.signals, 0, MONSTER_RESEARCH_TARGET, 0)
+      };
+    }
+  }
+  for (const index of Array.isArray(captured) ? captured : []) {
+    research[String(index)] = { discovered: true, signals: MONSTER_RESEARCH_TARGET };
+  }
+  return research;
+}
+
+function normalizeCampaignProgress(raw = {}, unlockedRegion = 0) {
+  const source = raw?.regions && typeof raw.regions === "object" ? raw.regions : {};
+  const regions = {};
+  for (let index = 0; index < REGIONS.length; index += 1) {
+    const item = source[String(index)] || {};
+    const legacyCleared = !raw?.regions && index < unlockedRegion;
+    const clearedActs = Array.from({ length: ADVENTURE_ACT_COUNT }, (_, actIndex) =>
+      legacyCleared || item?.clearedActs?.[actIndex] === true
+    );
+    const unlockedAct = getCampaignUnlockedActFromClears(clearedActs);
+    regions[String(index)] = {
+      clearedActs,
+      selectedAct: clampNumber(item?.selectedAct, 0, unlockedAct, getCampaignDefaultActFromClears(clearedActs))
+    };
+  }
+  return { regions };
+}
+
+function getCampaignUnlockedActFromClears(clearedActs = []) {
+  for (let index = 0; index < ADVENTURE_ACT_COUNT; index += 1) {
+    if (clearedActs[index] !== true) {
+      return index;
+    }
+  }
+  return ADVENTURE_ACT_COUNT - 1;
+}
+
+function getCampaignDefaultActFromClears(clearedActs = []) {
+  const firstOpen = clearedActs.findIndex((cleared) => cleared !== true);
+  return firstOpen >= 0 ? firstOpen : ADVENTURE_ACT_COUNT - 1;
+}
+
 function clampNumber(value, min, max, fallback) {
   const number = Number(value);
   if (!Number.isFinite(number)) {
@@ -1035,6 +1118,7 @@ function createRunStats() {
     skipped: 0,
     monsters: 0,
     captured: 0,
+    researchSignals: 0,
     capturedMonsters: [],
     monsterExp: 0,
     monsterShards: 0,
@@ -1219,6 +1303,113 @@ function hideClearCinematic() {
   els.clearCinematic?.classList.add("hidden");
 }
 
+function hideActCamp() {
+  actCampContext = null;
+  els.actCampOverlay?.classList.add("hidden");
+  els.actCampOverlay?.classList.remove("active");
+  els.playPanel?.classList.remove("camp-hidden");
+}
+
+function renderActCampRoute(regionIndex, focusedAct) {
+  if (!els.actCampRoute) {
+    return;
+  }
+  const campaign = getCampaignRegionProgress(regionIndex);
+  els.actCampRoute.replaceChildren();
+  for (let actIndex = 0; actIndex < ADVENTURE_ACT_COUNT; actIndex += 1) {
+    const node = document.createElement("span");
+    node.className = "act-camp-route-node";
+    node.dataset.state = actIndex === focusedAct
+      ? "current"
+      : (campaign.clearedActs[actIndex] ? "clear" : "locked");
+    node.innerHTML = `<b>${actIndex + 1}</b><em>${actIndex === ADVENTURE_ACT_COUNT - 1 ? "BOSS" : "ACT"}</em>`;
+    els.actCampRoute.appendChild(node);
+  }
+}
+
+function renderActCampRewards() {
+  if (!els.actCampRewards) {
+    return;
+  }
+  const totalAttempts = runStats.correct + runStats.wrong;
+  const accuracy = totalAttempts ? Math.round((runStats.correct / totalAttempts) * 100) : 0;
+  const rewards = [
+    ["完成題目", `${runStats.correct}`, "cyan"],
+    ["答題準確", `${accuracy}%`, "gold"],
+    ["研究訊號", `${runStats.researchSignals || 0}`, "violet"],
+    ["連擊紀錄", `${runStats.maxCombo}`, "green"]
+  ];
+  if (runStats.materialsAwarded) {
+    rewards.push(["遠征素材", `+${runStats.materials.candy} 糖果`, "orange"]);
+  }
+  els.actCampRewards.replaceChildren(...rewards.map(([label, value, tone]) => {
+    const item = document.createElement("div");
+    item.className = `act-camp-reward ${tone}`;
+    item.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+    return item;
+  }));
+}
+
+function showActCamp({ outcome = "clear", clearedRegionIndex = getCurrentRegionIndex(), defeatedBoss = false, unlockedRegionNow = false, nextRegion = null } = {}) {
+  if (!els.actCampOverlay) {
+    return;
+  }
+  const region = REGIONS[clearedRegionIndex] || REGIONS[0];
+  const failed = outcome === "retreat";
+  let nextRegionIndex = clearedRegionIndex;
+  let nextAct = activeAdventureAct;
+  let continueLabel = "再次挑戰本幕";
+  if (!failed && !defeatedBoss) {
+    nextAct = Math.min(ADVENTURE_ACT_COUNT - 1, activeAdventureAct + 1);
+    continueLabel = `前往第 ${nextAct + 1} 幕`;
+  } else if (!failed && defeatedBoss && unlockedRegionNow && nextRegion) {
+    nextRegionIndex = REGIONS.indexOf(nextRegion);
+    nextAct = getSelectedCampaignAct(nextRegionIndex);
+    continueLabel = `前往 ${nextRegion.name}`;
+  } else if (!failed && defeatedBoss) {
+    nextAct = 0;
+    continueLabel = "回第一幕補強";
+  }
+
+  actCampContext = { nextRegionIndex, nextAct };
+  const presentation = getActPresentation(activeAdventureAct);
+  els.actCampArt.style.backgroundImage = `linear-gradient(180deg, rgba(7, 12, 28, 0.04), rgba(7, 12, 28, 0.84)), url("${getRegionBackgroundPath(clearedRegionIndex)}")`;
+  els.actCampKicker.textContent = failed ? "RECOVERY CAMP" : (defeatedBoss ? "REGION COMPLETE" : "ACT CLEAR");
+  els.actCampTitle.textContent = failed
+    ? `第 ${activeAdventureAct + 1} 幕需要補給`
+    : defeatedBoss
+      ? (unlockedRegionNow ? `${region.name} 路線突破` : `${region.name} Boss 擊破`)
+      : `第 ${activeAdventureAct + 1} 幕完成`;
+  els.actCampDetail.textContent = failed
+    ? "資料與研究訊號已保留。整理後再挑戰，怪物會等著你。"
+    : defeatedBoss
+      ? (unlockedRegionNow ? `新地區 ${nextRegion?.name || ""} 已開啟。` : "再補強幾個單字，就能讓下一條路線穩定開啟。")
+      : `${presentation.detail} 這一幕的成果已存入遠征紀錄。`;
+  els.actCampContinueButton.textContent = continueLabel;
+  els.actCampReviewButton.hidden = runStats.wrongQuestions.length === 0;
+  renderActCampRoute(clearedRegionIndex, activeAdventureAct);
+  renderActCampRewards();
+  els.playPanel?.classList.add("camp-hidden");
+  els.actCampOverlay.classList.remove("hidden", "active");
+  void els.actCampOverlay.offsetWidth;
+  els.actCampOverlay.classList.add("active");
+  startMusic(getRegionMusicTrackId(clearedRegionIndex));
+  playTone(failed ? "wrong" : "regionClear");
+}
+
+function continueFromActCamp() {
+  const context = actCampContext;
+  hideActCamp();
+  if (!context) {
+    returnHome();
+    return;
+  }
+  setCurrentRegion(context.nextRegionIndex);
+  setSelectedCampaignAct(context.nextRegionIndex, context.nextAct);
+  started = true;
+  startNormalRun(true);
+}
+
 function renderClearProgress(region) {
   if (!els.clearProgress) {
     return;
@@ -1338,9 +1529,13 @@ function getRunActInfo(encounterIndex = runEncounterIndex) {
       mode: room.mode
     };
   }
-  const actIndex = Math.max(0, Math.min(RUN_ACTS.length - 1, Math.floor(encounterIndex / ENCOUNTERS_PER_ACT)));
+  const actIndex = activeRunMode === "adventure"
+    ? clampNumber(activeAdventureAct, 0, RUN_ACTS.length - 1, 0)
+    : Math.max(0, Math.min(RUN_ACTS.length - 1, Math.floor(encounterIndex / ENCOUNTERS_PER_ACT)));
   const act = RUN_ACTS[actIndex] || RUN_ACTS[0];
-  const localIndex = encounterIndex % ENCOUNTERS_PER_ACT;
+  const localIndex = activeRunMode === "adventure"
+    ? encounterIndex
+    : encounterIndex % ENCOUNTERS_PER_ACT;
   return {
     ...act,
     actIndex,
@@ -1360,7 +1555,21 @@ function isBossEncounter() {
   if (battleTestMode) {
     return false;
   }
+  if (activeRunMode === "adventure") {
+    return activeAdventureAct === ADVENTURE_ACT_COUNT - 1
+      && runEncounterIndex === activeEncounterCount - 1;
+  }
   return runEncounterIndex === activeEncounterCount - 1;
+}
+
+function isActCaptainEncounter() {
+  return activeRunMode === "adventure"
+    && runEncounterIndex === activeEncounterCount - 1;
+}
+
+function getAdventureEncounterMode(actIndex = activeAdventureAct, encounterIndex = runEncounterIndex) {
+  const schedule = ADVENTURE_MODE_SCHEDULE[clampNumber(actIndex, 0, ADVENTURE_MODE_SCHEDULE.length - 1, 0)] || ADVENTURE_MODE_SCHEDULE[0];
+  return schedule[clampNumber(encounterIndex, 0, schedule.length - 1, 0)] || ANSWER_MODE_STANDARD;
 }
 
 function rememberWrongQuestion(question) {
@@ -1566,9 +1775,38 @@ function captureMonster(index) {
   }
   progress.captured.push(index);
   progress.captured.sort((a, b) => a - b);
+  progress.monsterResearch = normalizeMonsterResearch(progress.monsterResearch, progress.captured);
   getMonsterProgress(index);
   saveProgress();
   return true;
+}
+
+function getMonsterResearch(index) {
+  progress.monsterResearch = normalizeMonsterResearch(progress.monsterResearch, progress.captured);
+  const key = String(index);
+  if (!progress.monsterResearch[key]) {
+    progress.monsterResearch[key] = { discovered: false, signals: 0 };
+  }
+  return progress.monsterResearch[key];
+}
+
+function awardMonsterResearch(index, { actCaptain = false, defeatedBoss = false } = {}) {
+  const research = getMonsterResearch(index);
+  const wasCaptured = hasCapturedMonster(index);
+  const firstSignal = research.signals === 0;
+  const gain = wasCaptured
+    ? 0
+    : Math.max(1, (firstSignal ? 2 : 1) + (actCaptain ? 1 : 0) + (defeatedBoss ? 1 : 0));
+  research.discovered = true;
+  research.signals = Math.min(MONSTER_RESEARCH_TARGET, research.signals + gain);
+  const capturedNow = !wasCaptured && research.signals >= MONSTER_RESEARCH_TARGET && captureMonster(index);
+  saveProgress();
+  return {
+    discoveredNow: firstSignal,
+    gained: gain,
+    signals: research.signals,
+    capturedNow
+  };
 }
 
 function addInventoryMaterials(materials) {
@@ -1579,7 +1817,7 @@ function addInventoryMaterials(materials) {
   saveProgress();
 }
 
-function awardRunCompletionMaterials() {
+function awardRunCompletionMaterials({ partial = false } = {}) {
   if (runStats.materialsAwarded) {
     return runStats.materials;
   }
@@ -1590,12 +1828,17 @@ function awardRunCompletionMaterials() {
   }
   const totalAttempts = runStats.correct + runStats.wrong;
   const accuracy = totalAttempts ? runStats.correct / totalAttempts : 0;
-  const completionScale = activeRunMode === "adventure" ? 1 : Math.max(0.28, activeEncounterCount / ENCOUNTERS_PER_RUN);
-  const actBonus = RUN_ACTS.reduce((sum, act) => sum + act.rewardScale, 0) * completionScale;
-  const candy = Math.max(activeRunMode === "adventure" ? 3 : 1, Math.round((3 + runStats.monsters * 0.65) * completionScale + actBonus));
-  const energyBase = activeRunMode === "adventure" ? 1 : 0;
-  const energy = energyBase + (accuracy >= 0.75 ? 1 : 0) + (activeRunMode === "adventure" && runStats.wrong === 0 ? 1 : 0);
-  const shards = Math.max(activeRunMode === "adventure" ? 2 : 1, Math.round((2 + Math.floor(runStats.maxCombo / 4) + (accuracy >= 0.9 ? 1 : 0)) * completionScale));
+  const act = getRunActInfo();
+  const completionScale = activeRunMode === "adventure"
+    ? (partial ? 0.35 : 1)
+    : Math.max(0.28, activeEncounterCount / ENCOUNTERS_PER_RUN);
+  const actBonus = activeRunMode === "adventure"
+    ? act.rewardScale
+    : RUN_ACTS.reduce((sum, item) => sum + item.rewardScale, 0) * completionScale;
+  const candy = Math.max(partial ? 1 : (activeRunMode === "adventure" ? 2 : 1), Math.round((2 + runStats.monsters * 0.6) * completionScale + actBonus));
+  const energyBase = activeRunMode === "adventure" && !partial && act.actIndex > 0 ? 1 : 0;
+  const energy = energyBase + (!partial && accuracy >= 0.82 ? 1 : 0) + (activeRunMode === "adventure" && !partial && runStats.wrong === 0 ? 1 : 0);
+  const shards = Math.max(partial ? 0 : (activeRunMode === "adventure" ? 1 : 1), Math.round((1 + Math.floor(runStats.maxCombo / 4) + (!partial && accuracy >= 0.9 ? 1 : 0)) * completionScale));
   runStats.materials = { candy, energy, shards };
   runStats.materialsAwarded = true;
   addInventoryMaterials(runStats.materials);
@@ -1672,9 +1915,66 @@ function getCurrentRegionIndex() {
 
 function setCurrentRegion(index) {
   progress.currentRegion = clampNumber(index, 0, getUnlockedRegionIndex(), getCurrentRegionIndex());
+  activeAdventureAct = getSelectedCampaignAct(progress.currentRegion);
   saveProgress();
   updateRegionPanel();
   updateHomeRegionSummary();
+}
+
+function getCampaignRegionProgress(index = getCurrentRegionIndex()) {
+  progress.campaign = normalizeCampaignProgress(progress.campaign, getUnlockedRegionIndex());
+  const key = String(clampNumber(index, 0, REGIONS.length - 1, 0));
+  if (!progress.campaign.regions[key]) {
+    progress.campaign.regions[key] = {
+      clearedActs: Array.from({ length: ADVENTURE_ACT_COUNT }, () => false),
+      selectedAct: 0
+    };
+  }
+  return progress.campaign.regions[key];
+}
+
+function getCampaignUnlockedAct(index = getCurrentRegionIndex()) {
+  return getCampaignUnlockedActFromClears(getCampaignRegionProgress(index).clearedActs);
+}
+
+function getCampaignDefaultAct(index = getCurrentRegionIndex()) {
+  return getCampaignDefaultActFromClears(getCampaignRegionProgress(index).clearedActs);
+}
+
+function getSelectedCampaignAct(index = getCurrentRegionIndex()) {
+  const record = getCampaignRegionProgress(index);
+  return clampNumber(record.selectedAct, 0, getCampaignUnlockedAct(index), getCampaignDefaultAct(index));
+}
+
+function setSelectedCampaignAct(index, actIndex) {
+  const record = getCampaignRegionProgress(index);
+  const unlockedAct = getCampaignUnlockedActFromClears(record.clearedActs);
+  const defaultAct = getCampaignDefaultActFromClears(record.clearedActs);
+  record.selectedAct = clampNumber(actIndex, 0, unlockedAct, defaultAct);
+  if (index === getCurrentRegionIndex()) {
+    activeAdventureAct = record.selectedAct;
+  }
+  saveProgress();
+  updateRegionPanel();
+  updateHomeRegionSummary();
+}
+
+function completeCampaignAct(index = getCurrentRegionIndex(), actIndex = activeAdventureAct) {
+  const record = getCampaignRegionProgress(index);
+  const safeAct = clampNumber(actIndex, 0, ADVENTURE_ACT_COUNT - 1, 0);
+  const firstClear = record.clearedActs[safeAct] !== true;
+  record.clearedActs[safeAct] = true;
+  const nextAct = Math.min(ADVENTURE_ACT_COUNT - 1, safeAct + 1);
+  const unlockedAct = getCampaignUnlockedActFromClears(record.clearedActs);
+  record.selectedAct = nextAct <= unlockedAct ? nextAct : safeAct;
+  saveProgress();
+  updateRegionPanel();
+  updateHomeRegionSummary();
+  return { firstClear, nextAct: record.selectedAct };
+}
+
+function getActPresentation(actIndex = activeAdventureAct) {
+  return ACT_PRESENTATION[clampNumber(actIndex, 0, ACT_PRESENTATION.length - 1, 0)] || ACT_PRESENTATION[0];
 }
 
 function getChapterNumber(question) {
@@ -1770,19 +2070,18 @@ function updateRegionPanel() {
     return;
   }
   const current = getCurrentRegionIndex();
-  const unlocked = getUnlockedRegionIndex();
   const region = REGIONS[current];
-  const count = getRegionQuestions(current).length;
   const status = getRegionUnlockStatus(current);
+  const campaign = getCampaignRegionProgress(current);
+  const selectedAct = getSelectedCampaignAct(current);
   const seenPct = status.seenTarget ? Math.min(1, status.seen / status.seenTarget) : 0;
   const steadyPct = status.steadyTarget ? Math.min(1, status.steady / status.steadyTarget) : 0;
-  const missionText = current < REGIONS.length - 1 ? "Boss 戰準備中" : "最終挑戰";
   els.regionCard.dataset.theme = region.theme || "sun";
   if (els.regionCardVisual) {
     els.regionCardVisual.style.backgroundImage = `linear-gradient(180deg, rgba(20, 16, 12, 0.02), rgba(20, 16, 12, 0.42)), url("${getRegionBackgroundPath(current)}")`;
   }
   els.regionName.textContent = region.name;
-  els.regionMeta.textContent = `${region.range} · ${count} 題任務 · ${missionText}`;
+  els.regionMeta.textContent = `${region.range} · 第 ${selectedAct + 1}/${ADVENTURE_ACT_COUNT} 幕 · 遠征 ${campaign.clearedActs.filter(Boolean).length}/${ADVENTURE_ACT_COUNT}`;
   els.regionProgress.replaceChildren();
   [
     ["探索", seenPct, `${status.seen}/${status.seenTarget}`],
@@ -1815,7 +2114,9 @@ function updateHomeRegionSummary() {
     return;
   }
   const region = REGIONS[getCurrentRegionIndex()];
-  els.loadSummary.textContent = `冒險地圖已更新，下一站是 ${region.name}。`;
+  const act = getSelectedCampaignAct();
+  const presentation = getActPresentation(act);
+  els.loadSummary.textContent = `${region.name} · 第 ${act + 1}/${ADVENTURE_ACT_COUNT} 幕「${presentation.title}」已就緒。`;
 }
 
 function openRegionMap() {
@@ -1895,14 +2196,14 @@ function renderRegionMap() {
   const unlocked = getUnlockedRegionIndex();
   const currentRegion = REGIONS[current];
   const status = getRegionUnlockStatus(current);
-  els.regionMapSummary.textContent = current < REGIONS.length - 1
-    ? `目前選擇：${currentRegion.name}。解鎖下一區需要 Boss 擊破，${status.text}。`
-    : `目前選擇：${currentRegion.name}。這是目前最後地區。`;
+  const selectedAct = getSelectedCampaignAct(current);
+  const campaign = getCampaignRegionProgress(current);
+  const actPresentation = getActPresentation(selectedAct);
+  els.regionMapSummary.textContent = `${currentRegion.name} · 第 ${selectedAct + 1}/${ADVENTURE_ACT_COUNT} 幕：${actPresentation.title}。Boss 前需要完成 ${status.text}。`;
   if (els.regionMapStartButton) {
-    els.regionMapStartButton.disabled = questions.length === 0;
-    els.regionMapStartButton.textContent = `挑戰 ${currentRegion.name}`;
+    els.regionMapStartButton.textContent = `開始第 ${selectedAct + 1} 幕：${actPresentation.title}`;
   }
-
+  renderCampaignActPicker(current, campaign, selectedAct);
   els.regionMapGrid.replaceChildren();
   REGIONS.forEach((region, index) => {
     const available = index <= unlocked;
@@ -1954,6 +2255,34 @@ function renderRegionMap() {
   });
 }
 
+function renderCampaignActPicker(regionIndex, campaign, selectedAct) {
+  if (!els.regionMapActPicker) {
+    return;
+  }
+  const unlockedAct = getCampaignUnlockedAct(regionIndex);
+  els.regionMapActPicker.replaceChildren();
+  for (let actIndex = 0; actIndex < ADVENTURE_ACT_COUNT; actIndex += 1) {
+    const act = RUN_ACTS[actIndex] || RUN_ACTS[0];
+    const presentation = getActPresentation(actIndex);
+    const available = actIndex <= unlockedAct;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "campaign-act-node";
+    button.disabled = !available;
+    button.dataset.state = actIndex === selectedAct
+      ? "selected"
+      : (campaign.clearedActs[actIndex] ? "clear" : available ? "open" : "locked");
+    button.innerHTML = `<span>ACT ${actIndex + 1}</span><strong>${presentation.title}</strong><small>${campaign.clearedActs[actIndex] ? "已完成" : (available ? act.name : "未開啟")}</small>`;
+    if (available) {
+      button.addEventListener("click", () => {
+        setSelectedCampaignAct(regionIndex, actIndex);
+        renderRegionMap();
+      });
+    }
+    els.regionMapActPicker.appendChild(button);
+  }
+}
+
 function buildMonsterQueue(count, regionIndex = getCurrentRegionIndex()) {
   const queue = [];
   const used = new Set();
@@ -1982,6 +2311,20 @@ function buildMonsterQueue(count, regionIndex = getCurrentRegionIndex()) {
   return queue;
 }
 
+function buildAdventureMonsterQueue(regionIndex = getCurrentRegionIndex()) {
+  const regionPool = getRegionMonsterIndices(regionIndex);
+  const uncaptured = regionPool.filter((index) => !hasCapturedMonster(index));
+  const candidates = uncaptured.length ? uncaptured : regionPool;
+  const lead = shuffle(candidates)[0] ?? regionPool[0] ?? 0;
+  const supportPool = shuffle(regionPool.filter((index) => index !== lead));
+  const support = Array.from({ length: Math.max(0, ENCOUNTERS_PER_ACT - 2) }, (_, index) =>
+    supportPool[index % Math.max(1, supportPool.length)] ?? lead
+  );
+
+  // The lead returns as the act captain. A first scan plus the captain win completes its three-part research signal.
+  return [lead, ...support, lead];
+}
+
 function updateProgressLabels() {
   const captured = getCapturedCount();
   const inventory = normalizeInventory(progress.inventory);
@@ -2000,24 +2343,34 @@ function renderDex() {
 
   monsterNames.forEach((name, index) => {
     const caught = hasCapturedMonster(index);
+    const research = getMonsterResearch(index);
     const card = document.createElement("article");
-    card.className = caught ? "dex-card" : "dex-card locked";
+    card.className = caught ? "dex-card" : (research.discovered ? "dex-card discovered" : "dex-card locked");
 
     const img = document.createElement("img");
     const currentStage = caught ? getMonsterEvolutionStage(index) : "baby";
     const displayName = getMonsterDisplayName(index, currentStage);
     img.src = getMonsterSpritePath(index, currentStage);
-    img.alt = caught ? displayName : "未收服怪物";
+    img.alt = caught || research.discovered ? displayName : "未收服怪物";
 
     const title = document.createElement("strong");
-    title.textContent = caught ? displayName : "???";
+    title.textContent = caught || research.discovered ? displayName : "???";
 
     const meta = document.createElement("span");
     meta.textContent = caught
       ? `No. ${String(index + 1).padStart(2, "0")} ${getMonsterEvolutionLabel(currentStage)}｜${getMonsterEnglishName(index)}`
-      : "尚未收服";
+      : research.discovered
+        ? `研究訊號 ${research.signals}/${MONSTER_RESEARCH_TARGET}`
+        : "尚未發現";
 
     card.append(img, title, meta);
+    if (!caught && research.discovered) {
+      const researchBar = document.createElement("div");
+      researchBar.className = "dex-research";
+      researchBar.style.setProperty("--research-progress", `${Math.round((research.signals / MONSTER_RESEARCH_TARGET) * 100)}%`);
+      researchBar.textContent = `再取得 ${Math.max(0, MONSTER_RESEARCH_TARGET - research.signals)} 格訊號即可收服`;
+      card.appendChild(researchBar);
+    }
     if (caught) {
       const monster = getMonsterProgress(index);
       const growth = document.createElement("div");
@@ -2242,7 +2595,10 @@ function buildRunStages(items, encounterCount, label = "遠征") {
     return {
       chapter: `${label}｜${act.label}`,
       act,
-      questions: buildRunQuestionSet(items, usedKeys)
+      answerMode: activeRunMode === "adventure"
+        ? getAdventureEncounterMode(act.actIndex, act.localIndex)
+        : ANSWER_MODE_STANDARD,
+      questions: buildRunQuestionSet(items, usedKeys, act)
     };
   }).filter((stage) => stage.questions.length > 0);
 }
@@ -2325,7 +2681,7 @@ function startTowerFloor(floor = 1) {
   showBanner(`第 ${safeFloor} 層試煉開始！`);
 }
 
-function buildRunQuestionSet(items, usedKeys) {
+function buildRunQuestionSet(items, usedKeys, act = getRunActInfo()) {
   const picked = [];
   const localKeys = new Set();
 
@@ -2360,11 +2716,22 @@ function buildRunQuestionSet(items, usedKeys) {
   const wrongWords = items.filter((item) => getWordProgress(item).wrong > 0);
   const masteredWords = items.filter((item) => getWordProgress(item).mastered);
 
-  addWeighted(newWords, 2, 3);
-  addWeighted(wrongWords, 1, 2);
-  addWeighted(weakWords, 1, 1);
+  const mixes = [
+    { newWords: 1, wrongWords: 1, weakWords: 1, masteredWords: 2 },
+    { newWords: 3, wrongWords: 0, weakWords: 1, masteredWords: 0 },
+    { newWords: 2, wrongWords: 1, weakWords: 2, masteredWords: 0 },
+    { newWords: 1, wrongWords: 2, weakWords: 2, masteredWords: 0 },
+    { newWords: 2, wrongWords: 1, weakWords: 1, masteredWords: 1 }
+  ];
+  const mix = activeRunMode === "adventure"
+    ? (mixes[clampNumber(act.localIndex, 0, mixes.length - 1, 0)] || mixes[0])
+    : { newWords: 2, wrongWords: 1, weakWords: 1, masteredWords: 1 };
+
+  addWeighted(newWords, mix.newWords, 3);
+  addWeighted(wrongWords, mix.wrongWords, 2);
+  addWeighted(weakWords, mix.weakWords, 1);
+  addWeighted(masteredWords, mix.masteredWords);
   addWeighted(items, QUESTIONS_PER_STAGE - picked.length);
-  addWeighted(masteredWords, QUESTIONS_PER_STAGE - picked.length);
 
   return picked;
 }
@@ -2489,6 +2856,7 @@ function resetRun(showIntro = true) {
   els.captureCard?.classList.add("hidden");
   els.captureCard?.classList.remove("active");
   hideClearCinematic();
+  hideActCamp();
   if (monsterQueue.length < activeEncounterCount) {
     monsterQueue = buildMonsterQueue(activeEncounterCount);
   }
@@ -2499,11 +2867,12 @@ function resetRun(showIntro = true) {
 
 function startNormalRun(showIntro = true) {
   activeRunMode = "adventure";
-  activeEncounterCount = ENCOUNTERS_PER_RUN;
   const regionIndex = getCurrentRegionIndex();
+  activeAdventureAct = getSelectedCampaignAct(regionIndex);
+  activeEncounterCount = ENCOUNTERS_PER_ACT;
   const region = REGIONS[regionIndex];
   stages = buildRunStages(getRegionQuestions(regionIndex), activeEncounterCount, region.name);
-  monsterQueue = buildMonsterQueue(activeEncounterCount, regionIndex);
+  monsterQueue = buildAdventureMonsterQueue(regionIndex);
   pendingRegionIntro = showIntro;
   resetRun(showIntro);
 }
@@ -2513,6 +2882,7 @@ function startWrongReviewRun() {
   if (!wrongQuestions.length) {
     return;
   }
+  activeRunMode = "practice";
   activeEncounterCount = Math.min(REVIEW_ENCOUNTERS_PER_RUN, Math.max(1, wrongQuestions.length));
   stages = buildPracticeStages(wrongQuestions, "錯題重練", activeEncounterCount);
   monsterQueue = buildMonsterQueue(activeEncounterCount);
@@ -2747,6 +3117,16 @@ function isScoutEnabled() {
   return started && activeRunMode !== "tower" && progress.scoutEnabled !== false && !battleTestMode;
 }
 
+function shouldShowScoutForEncounter() {
+  if (!isScoutEnabled()) {
+    return false;
+  }
+  if (activeRunMode === "adventure") {
+    return runEncounterIndex === 0 || isBossEncounter();
+  }
+  return true;
+}
+
 function getScoutStatus(question) {
   const word = progress.words[getWordKey(question)] || { correct: 0, wrong: 0, streak: 0, seen: 0, mastered: false };
   if (word.wrong > 0 && !word.mastered) {
@@ -2776,7 +3156,7 @@ function getScoutQuestions() {
 
 function showScoutOverlay(onContinue) {
   const items = getScoutQuestions();
-  if (!isScoutEnabled() || !items.length || !els.scoutOverlay || !els.scoutList) {
+  if (!shouldShowScoutForEncounter() || !items.length || !els.scoutOverlay || !els.scoutList) {
     onContinue();
     return;
   }
@@ -2943,16 +3323,6 @@ function getAnswerLetters(answer) {
 }
 
 function getResolvedAnswerMode(stage = getStage()) {
-  if (activeRunMode === "adventure" && getCurrentRegionIndex() === 0) {
-    const tutorialEncounters = {
-      1: ANSWER_MODE_SHUFFLE,
-      5: ANSWER_MODE_ODD,
-      10: ANSWER_MODE_TIMED
-    };
-    if (tutorialEncounters[runEncounterIndex]) {
-      return tutorialEncounters[runEncounterIndex];
-    }
-  }
   const configured = stage?.answerMode || ANSWER_MODE_STANDARD;
   if (configured !== ANSWER_MODE_MIXED) {
     return configured;
@@ -3082,7 +3452,7 @@ function finishModeTutorial() {
 function shouldTeachCurrentMode() {
   return activeRunMode === "adventure"
     && getCurrentRegionIndex() === 0
-    && (currentAnswerMode !== ANSWER_MODE_STANDARD || runEncounterIndex === 0)
+    && (currentAnswerMode !== ANSWER_MODE_STANDARD || (activeAdventureAct === 0 && runEncounterIndex === 0))
     && progress.tutorials[currentAnswerMode] !== true;
 }
 
@@ -4224,16 +4594,24 @@ function defeatMonster() {
   els.monster.classList.add("defeat");
   triggerCanvasDefeat();
   const defeatedBoss = isBossEncounter();
+  const actCaptain = isActCaptainEncounter();
   const monsterIndex = getMonsterIndex();
   const monsterStage = getEncounterMonsterStage(monsterIndex);
   const monsterName = getMonsterDisplayName(monsterIndex, monsterStage);
   const clearedRegion = REGIONS[getCurrentRegionIndex()];
   const isAdventureRun = activeRunMode === "adventure";
-  const capturedNow = isAdventureRun ? captureMonster(monsterIndex) : false;
+  const research = isAdventureRun
+    ? awardMonsterResearch(monsterIndex, { actCaptain, defeatedBoss })
+    : null;
+  const capturedNow = research?.capturedNow === true;
   const unlockStatus = defeatedBoss && isAdventureRun ? getRegionUnlockStatus(getCurrentRegionIndex()) : null;
   const unlockedRegionNow = defeatedBoss && isAdventureRun && unlockNextRegion();
   const nextRegion = REGIONS[getCurrentRegionIndex()];
   runStats.monsters += 1;
+  runStats.researchSignals += research?.gained || 0;
+  if (research?.gained > 0 && !capturedNow) {
+    addRunReward("研究訊號", `${monsterName} ${research.signals}/${MONSTER_RESEARCH_TARGET}`, "research", { monsterIndex });
+  }
   if (capturedNow) {
     runStats.captured += 1;
     runStats.capturedMonsters.push(monsterIndex);
@@ -4278,6 +4656,8 @@ function defeatMonster() {
     if (!defeatedBoss) {
       window.setTimeout(() => showCaptureCard(monsterIndex), 260);
     }
+  } else if (research?.gained > 0) {
+    showReward("研究訊號", `${monsterName} ${research.signals}/${MONSTER_RESEARCH_TARGET}`, "research");
   } else if (growth?.evolved) {
     showReward("進化成功！", `${getMonsterDisplayName(monsterIndex, growth.afterStage)} ${getMonsterEvolutionLabel(growth.afterStage)}`, "evolution");
   } else if (growth && (growth.levelUps > 0 || growth.starUps > 0)) {
@@ -4307,11 +4687,23 @@ function defeatMonster() {
         window.setTimeout(showRunSummary, 1250);
         return;
       }
+      completeCampaignAct(REGIONS.indexOf(clearedRegion), activeAdventureAct);
       showClearCinematic({ clearedRegion, nextRegion, unlockedRegionNow, unlockStatus });
       window.setTimeout(() => {
         hideClearCinematic();
-        showRunSummary();
+        showActCamp({
+          clearedRegionIndex: REGIONS.indexOf(clearedRegion),
+          defeatedBoss: true,
+          unlockedRegionNow,
+          nextRegion
+        });
       }, 2450);
+      return;
+    }
+    if (isAdventureRun && actCaptain) {
+      completeCampaignAct(REGIONS.indexOf(clearedRegion), activeAdventureAct);
+      awardRunCompletionMaterials();
+      showActCamp({ clearedRegionIndex: REGIONS.indexOf(clearedRegion) });
       return;
     }
     stageIndex = (stageIndex + 1) % stages.length;
@@ -4361,6 +4753,11 @@ function gameOver() {
   hideModeTutorial();
   acceptingInput = false;
   hideAnswerCallout();
+  if (activeRunMode === "adventure") {
+    awardRunCompletionMaterials({ partial: true });
+    showActCamp({ outcome: "retreat", clearedRegionIndex: getCurrentRegionIndex() });
+    return;
+  }
   setBattlePhase("spell");
   startMusic("title");
   showBanner("挑戰失敗");
@@ -4674,6 +5071,18 @@ function showRegionIntro() {
   if (els.regionIntroDetail) {
     els.regionIntroDetail.textContent = region.description;
   }
+  if (activeRunMode === "adventure") {
+    const presentation = getActPresentation(activeAdventureAct);
+    if (els.regionIntroRoute) {
+      els.regionIntroRoute.textContent = `${region.range} · ACT ${activeAdventureAct + 1}/${ADVENTURE_ACT_COUNT}`;
+    }
+    if (els.regionIntroName) {
+      els.regionIntroName.textContent = presentation.title;
+    }
+    if (els.regionIntroDetail) {
+      els.regionIntroDetail.textContent = presentation.detail;
+    }
+  }
   els.regionIntro.dataset.theme = region.theme || "grassland";
   els.regionIntro.classList.remove("hidden", "active");
   void els.regionIntro.offsetWidth;
@@ -4702,7 +5111,9 @@ function renderHud() {
   const act = getRunActInfo();
   els.stageLabel.textContent = activeRunMode === "tower"
     ? `第 ${activeTowerFloor} 層 ${runEncounterIndex + 1}/${activeEncounterCount}`
-    : `${act.name} ${act.localIndex + 1}/${ENCOUNTERS_PER_ACT}`;
+    : activeRunMode === "adventure"
+      ? `第 ${activeAdventureAct + 1} 幕 ${act.localIndex + 1}/${ENCOUNTERS_PER_ACT}`
+      : `${act.name} ${act.localIndex + 1}/${ENCOUNTERS_PER_ACT}`;
   els.comboLabel.textContent = String(combo);
   els.questionProgress.textContent = `${(questionIndex % stage.questions.length) + 1} / ${stage.questions.length}`;
   els.hpFill.style.width = `${Math.max(0, (monsterHp / monsterMaxHp) * 100)}%`;
@@ -4717,10 +5128,10 @@ function renderStageTrack() {
   for (let index = 0; index < activeEncounterCount; index += 1) {
     const node = document.createElement("span");
     node.className = "stage-node";
-    if ((activeRunMode === "tower" && index === 0) || (activeRunMode !== "tower" && index % ENCOUNTERS_PER_ACT === 0)) {
+    if (index === 0) {
       node.classList.add("act-start");
     }
-    if (index === activeEncounterCount - 1) {
+    if (index === activeEncounterCount - 1 && (activeRunMode !== "adventure" || activeAdventureAct === ADVENTURE_ACT_COUNT - 1)) {
       node.classList.add("boss-node");
     }
     if (index < runEncounterIndex) {
@@ -4737,7 +5148,9 @@ function applyMonsterVariant(index) {
   const monsterIndex = getMonsterIndex(index);
   const stage = getEncounterMonsterStage(monsterIndex);
   const displayName = getMonsterDisplayName(monsterIndex, stage);
-  els.monsterName.textContent = isBossEncounter() ? `Boss ${displayName}` : displayName;
+  els.monsterName.textContent = isBossEncounter()
+    ? `Boss ${displayName}`
+    : (isActCaptainEncounter() ? `幕首領 ${displayName}` : displayName);
   els.monsterSprite.src = getMonsterActionSpritePath(monsterIndex, stage, "idle-1");
   battleRenderState.monsterIndex = monsterIndex;
   battleRenderState.boss = isBossEncounter();
@@ -6446,6 +6859,7 @@ function returnHome() {
   closeTower();
   els.runSummaryOverlay?.classList.add("hidden");
   hideClearCinematic();
+  hideActCamp();
   els.startTitle.textContent = "單字怪獸遠征";
   els.startButton.textContent = "開始遠征";
   els.startButton.disabled = questions.length === 0;
@@ -6591,6 +7005,12 @@ els.summaryDexButton.addEventListener("click", () => {
   openDex();
 });
 els.summaryHomeButton.addEventListener("click", returnHome);
+els.actCampContinueButton?.addEventListener("click", continueFromActCamp);
+els.actCampReviewButton?.addEventListener("click", () => {
+  hideActCamp();
+  startWrongReviewRun();
+});
+els.actCampHomeButton?.addEventListener("click", returnHome);
 els.dexOverlay.addEventListener("click", (event) => {
   if (event.target === els.dexOverlay) {
     closeDex();

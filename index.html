@@ -187,6 +187,24 @@
               <div class="clear-progress" id="clearProgress"></div>
             </div>
           </div>
+          <section class="act-camp-overlay hidden" id="actCampOverlay" aria-label="Expedition camp" aria-live="polite">
+            <div class="act-camp-art" id="actCampArt" aria-hidden="true"></div>
+            <div class="act-camp-panel">
+              <div class="act-camp-signal" aria-hidden="true">
+                <span></span><span></span><span></span>
+              </div>
+              <p class="eyebrow" id="actCampKicker">ACT CLEAR</p>
+              <h2 id="actCampTitle">第一幕完成</h2>
+              <p id="actCampDetail">回到前線營地，整理剛才的成果。</p>
+              <div class="act-camp-route" id="actCampRoute" aria-label="Campaign act progress"></div>
+              <div class="act-camp-rewards" id="actCampRewards"></div>
+              <div class="act-camp-actions">
+                <button class="primary-button large" id="actCampContinueButton" type="button">前往下一幕</button>
+                <button class="secondary-button large" id="actCampReviewButton" type="button">重練錯題</button>
+                <button class="secondary-button large" id="actCampHomeButton" type="button">返回基地</button>
+              </div>
+            </div>
+          </section>
         </div>
 
         <div class="battle-footer">
@@ -316,6 +334,7 @@
             </button>
           </header>
           <div class="region-map-summary" id="regionMapSummary">選擇目前可挑戰的地區。</div>
+          <div class="campaign-act-picker" id="regionMapActPicker" aria-label="Expedition acts"></div>
           <div class="region-map-grid" id="regionMapGrid"></div>
           <div class="region-map-actions">
             <button class="secondary-button large" id="regionMapBackButton" type="button">回首頁</button>
